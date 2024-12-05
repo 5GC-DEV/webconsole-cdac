@@ -162,13 +162,23 @@ func deviceGroup(name string) configmodels.DeviceGroups {
 		Mtu:          1460,
 		UeDnnQos:     &qos,
 	}
-	deviceGroup := configmodels.DeviceGroups{
+	/* deviceGroup := configmodels.DeviceGroups{
 		DeviceGroupName:  name,
 		Imsis:            []string{"1234", "5678"},
 		SiteInfo:         "demo",
 		IpDomainName:     "pool1",
 		IpDomainExpanded: ipdomain,
+	} */
+	// If you are storing multiple domains, use a slice for IpDomainExpanded
+	// C-DAC Start
+	deviceGroup := configmodels.DeviceGroups{
+		DeviceGroupName:  name,
+		Imsis:            []string{"1234", "5678"},
+		SiteInfo:         "demo",
+		IpDomainName:     "pool1",
+		IpDomainExpanded: []configmodels.DeviceGroupsIpDomainExpanded{ipdomain}, // Updated to slice
 	}
+	// C-DAC END
 	return deviceGroup
 }
 

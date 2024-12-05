@@ -42,11 +42,13 @@ func deviceGroup(name string) configmodels.DeviceGroups {
 		UeDnnQos:     &qos,
 	}
 	deviceGroup := configmodels.DeviceGroups{
-		DeviceGroupName:  name,
-		Imsis:            []string{"1234", "5678"},
-		SiteInfo:         "demo",
-		IpDomainName:     "pool1",
-		IpDomainExpanded: ipdomain,
+		DeviceGroupName: name,
+		Imsis:           []string{"1234", "5678"},
+		SiteInfo:        "demo",
+		IpDomainName:    "pool1",
+		//IpDomainExpanded: ipdomain,
+		IpDomainExpanded: []configmodels.DeviceGroupsIpDomainExpanded{ipdomain}, // Updated to slice C-DAC Edit
+
 	}
 	return deviceGroup
 }
@@ -124,9 +126,18 @@ func (m *MockMongoSliceGetOne) RestfulAPIGetOne(collName string, filter bson.M) 
 
 func Test_handleDeviceGroupPost(t *testing.T) {
 	deviceGroups := []configmodels.DeviceGroups{deviceGroup("group1"), deviceGroup("group2"), deviceGroup("group_no_imsis"), deviceGroup("group_no_traf_class"), deviceGroup("group_no_qos")}
+	// deviceGroups[2].Imsis = []string{}
+	// deviceGroups[3].IpDomainExpanded.UeDnnQos.TrafficClass = nil
+	// deviceGroups[4].IpDomainExpanded.UeDnnQos = nil
+	// C-DAC START
 	deviceGroups[2].Imsis = []string{}
-	deviceGroups[3].IpDomainExpanded.UeDnnQos.TrafficClass = nil
-	deviceGroups[4].IpDomainExpanded.UeDnnQos = nil
+	if len(deviceGroups[3].IpDomainExpanded) > 0 {
+		deviceGroups[3].IpDomainExpanded[0].UeDnnQos.TrafficClass = nil
+	}
+	if len(deviceGroups[4].IpDomainExpanded) > 0 {
+		deviceGroups[4].IpDomainExpanded[0].UeDnnQos = nil
+	}
+	// C-DAC END
 	factory.WebUIConfig.Configuration.Mode5G = true
 	for _, testGroup := range deviceGroups {
 		configMsg := configmodels.ConfigMessage{
@@ -165,7 +176,63 @@ func Test_handleDeviceGroupPost(t *testing.T) {
 	}
 }
 
+// C-DAC START
 func Test_handleDeviceGroupPost_alreadyExists(t *testing.T) {
+	deviceGroups := []configmodels.DeviceGroups{
+		deviceGroup("group1"),
+		deviceGroup("group2"),
+		deviceGroup("group_no_imsis"),
+		deviceGroup("group_no_traf_class"),
+		deviceGroup("group_no_qos"),
+	}
+	deviceGroups[2].Imsis = []string{}
+	if len(deviceGroups[3].IpDomainExpanded) > 0 {
+		deviceGroups[3].IpDomainExpanded[0].UeDnnQos.TrafficClass = nil
+	}
+	if len(deviceGroups[4].IpDomainExpanded) > 0 {
+		deviceGroups[4].IpDomainExpanded[0].UeDnnQos = nil
+	}
+	factory.WebUIConfig.Configuration.Mode5G = true
+
+	for _, testGroup := range deviceGroups {
+		configMsg := configmodels.ConfigMessage{
+			DevGroupName: testGroup.DeviceGroupName,
+			DevGroup:     &testGroup,
+		}
+		subsUpdateChan := make(chan *Update5GSubscriberMsg, 10)
+		postData = make([]map[string]interface{}, 0)
+		dbadapter.CommonDBClient = &MockMongoPost{dbadapter.CommonDBClient}
+		dbadapter.CommonDBClient = &(MockMongoDeviceGroupGetOne{dbadapter.CommonDBClient, testGroup})
+		handleDeviceGroupPost(&configMsg, subsUpdateChan)
+		expected_collection := "webconsoleData.snapshots.devGroupData"
+		if postData[0]["coll"] != expected_collection {
+			t.Errorf("Expected collection %v, got %v", expected_collection, postData[0]["coll"])
+		}
+		expected_filter := bson.M{"group-name": testGroup.DeviceGroupName}
+		if !reflect.DeepEqual(postData[0]["filter"], expected_filter) {
+			t.Errorf("Expected filter %v, got %v", expected_filter, postData[0]["filter"])
+		}
+		var resultGroup configmodels.DeviceGroups
+		var result map[string]interface{} = postData[0]["data"].(map[string]interface{})
+		err := json.Unmarshal(mapToByte(result), &resultGroup)
+		if err != nil {
+			t.Errorf("Could not unmarshall result %v", result)
+		}
+		if !reflect.DeepEqual(resultGroup, testGroup) {
+			t.Errorf("Expected group %v, got %v", testGroup, resultGroup)
+		}
+		receivedConfigMsg := <-subsUpdateChan
+		if !reflect.DeepEqual(receivedConfigMsg.Msg, &configMsg) {
+			t.Errorf("Expected config message %v, got %v", configMsg, receivedConfigMsg.Msg)
+		}
+		if !reflect.DeepEqual(receivedConfigMsg.PrevDevGroup, &testGroup) {
+			t.Errorf("Expected previous device group to be %v, got %v", testGroup, receivedConfigMsg.PrevDevGroup)
+		}
+	}
+}
+
+// C-DAC END
+/*func Test_handleDeviceGroupPost_alreadyExists(t *testing.T) {
 	deviceGroups := []configmodels.DeviceGroups{deviceGroup("group1"), deviceGroup("group2"), deviceGroup("group_no_imsis"), deviceGroup("group_no_traf_class"), deviceGroup("group_no_qos")}
 	deviceGroups[2].Imsis = []string{}
 	deviceGroups[3].IpDomainExpanded.UeDnnQos.TrafficClass = nil
@@ -207,7 +274,7 @@ func Test_handleDeviceGroupPost_alreadyExists(t *testing.T) {
 			t.Errorf("Expected previous device group to be %v, got %v", testGroup, receivedConfigMsg.PrevDevGroup)
 		}
 	}
-}
+}*/
 
 func networkSlice(name string) configmodels.Slice {
 	upf := make(map[string]interface{}, 0)

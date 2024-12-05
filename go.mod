@@ -3,10 +3,10 @@ module github.com/omec-project/webconsole
 go 1.21
 
 require (
+	github.com/anaswarac-dac/config5g-cdac v0.0.0-20241202102502-e89ac4024fc1
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/omec-project/config5g v1.5.0
 	github.com/omec-project/openapi v1.3.1
 	github.com/omec-project/util v1.2.1
 	github.com/prometheus/client_golang v1.20.4

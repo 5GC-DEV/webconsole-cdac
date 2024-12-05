@@ -596,12 +596,16 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 
 				aimsis := getAddedImsisList(confData.Msg.DevGroup, confData.PrevDevGroup)
 				for _, imsi := range aimsis {
-					dnn := confData.Msg.DevGroup.IpDomainExpanded.Dnn
-					updateAmPolicyData(imsi)
-					updateSmPolicyData(snssai, dnn, imsi)
-					updateAmProvisionedData(snssai, confData.Msg.DevGroup.IpDomainExpanded.UeDnnQos, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, imsi)
-					updateSmProvisionedData(snssai, confData.Msg.DevGroup.IpDomainExpanded.UeDnnQos, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, dnn, imsi)
-					updateSmfSelectionProviosionedData(snssai, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, dnn, imsi)
+					if len(confData.Msg.DevGroup.IpDomainExpanded) > 0 {
+						for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded {
+							dnn := ipDomain.Dnn
+							updateAmPolicyData(imsi)
+							updateSmPolicyData(snssai, dnn, imsi)
+							updateAmProvisionedData(snssai, ipDomain.UeDnnQos, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, imsi)
+							updateSmProvisionedData(snssai, ipDomain.UeDnnQos, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, dnn, imsi)
+							updateSmfSelectionProviosionedData(snssai, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, dnn, imsi)
+						}
+					}
 				}
 
 				dimsis := getDeletedImsisList(confData.Msg.DevGroup, confData.PrevDevGroup)
@@ -655,14 +659,18 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 					devGroupConfig := getDeviceGroupByName(dgName)
 					if devGroupConfig != nil {
 						for _, imsi := range devGroupConfig.Imsis {
-							dnn := devGroupConfig.IpDomainExpanded.Dnn
-							mcc := slice.SiteInfo.Plmn.Mcc
-							mnc := slice.SiteInfo.Plmn.Mnc
-							updateAmPolicyData(imsi)
-							updateSmPolicyData(snssai, dnn, imsi)
-							updateAmProvisionedData(snssai, devGroupConfig.IpDomainExpanded.UeDnnQos, mcc, mnc, imsi)
-							updateSmProvisionedData(snssai, devGroupConfig.IpDomainExpanded.UeDnnQos, mcc, mnc, dnn, imsi)
-							updateSmfSelectionProviosionedData(snssai, mcc, mnc, dnn, imsi)
+							if len(confData.Msg.DevGroup.IpDomainExpanded) > 0 { // C-DAC
+								for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded { // C-DAC
+									dnn := ipDomain.Dnn // C-DAC
+									mcc := slice.SiteInfo.Plmn.Mcc
+									mnc := slice.SiteInfo.Plmn.Mnc
+									updateAmPolicyData(imsi)
+									updateSmPolicyData(snssai, dnn, imsi)
+									updateAmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, imsi)
+									updateSmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, dnn, imsi)
+									updateSmfSelectionProviosionedData(snssai, mcc, mnc, dnn, imsi)
+								}
+							}
 						}
 					}
 				}

@@ -92,7 +92,7 @@ func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
 	configLog.Infof("Printing request body : %v", req.Body)
 	configLog.Infof("URL : %v ", req.URL)
 
-	procReq := req.Body.(configmodels.DeviceGroups)
+	/* procReq := req.Body.(configmodels.DeviceGroups)
 	ipdomain := &procReq.IpDomainExpanded
 	configLog.Infof("Imsis.size : %v, Imsis: %v", len(procReq.Imsis), procReq.Imsis)
 
@@ -116,7 +116,41 @@ func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
 		}
 		configLog.Infof("  MbrUpLink :  %v ", ipdomain.UeDnnQos.DnnMbrUplink)
 	}
+*/
+	//C-DAC - Start
+	procReq := req.Body.(configmodels.DeviceGroups)
+	ipdomains := procReq.IpDomainExpanded // ipdomains is a slice
 
+	configLog.Infof("Imsis.size : %v, Imsis: %v", len(procReq.Imsis), procReq.Imsis)
+	configLog.Infof("IP Domain Name : %v", procReq.IpDomainName)
+
+	if len(ipdomains) > 0 {
+    	for i, ipdomain := range ipdomains {
+        	configLog.Infof("IP Domain details [%d]: %+v", i, ipdomain)
+        	configLog.Infof("  DNN Name : %v", ipdomain.Dnn)
+        	configLog.Infof("  UE Pool  : %v", ipdomain.UeIpPool)
+        	configLog.Infof("  DNS Primary : %v", ipdomain.DnsPrimary)
+        	configLog.Infof("  DNS Secondary : %v", ipdomain.DnsSecondary)
+        	configLog.Infof("  IP MTU : %v", ipdomain.Mtu)
+
+        	if ipdomain.UeDnnQos != nil {
+            	ipdomain.UeDnnQos.DnnMbrDownlink = convertToBps(ipdomain.UeDnnQos.DnnMbrDownlink, ipdomain.UeDnnQos.BitrateUnit)
+            	if ipdomain.UeDnnQos.DnnMbrDownlink < 0 {
+                	ipdomain.UeDnnQos.DnnMbrDownlink = math.MaxInt64
+            	}
+            	configLog.Infof("  MBR DownLink : %v", ipdomain.UeDnnQos.DnnMbrDownlink)
+
+            	ipdomain.UeDnnQos.DnnMbrUplink = convertToBps(ipdomain.UeDnnQos.DnnMbrUplink, ipdomain.UeDnnQos.BitrateUnit)
+            	if ipdomain.UeDnnQos.DnnMbrUplink < 0 {
+                	ipdomain.UeDnnQos.DnnMbrUplink = math.MaxInt64
+            	}
+            	configLog.Infof("  MBR UpLink : %v", ipdomain.UeDnnQos.DnnMbrUplink)
+        	}
+    	}
+	} else {
+    	configLog.Infof("No IP Domain Expanded data available.")
+	}
+	// C-DAC END
 	var msg configmodels.ConfigMessage
 	procReq.DeviceGroupName = groupName
 	msg.MsgType = configmodels.Device_group

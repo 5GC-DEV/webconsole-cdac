@@ -867,13 +867,14 @@ func (x *NetworkSlice) GetAppFilters() *AppFilterRules {
 	return nil
 }
 
+//C-DAC -->  change *IpDomain to []IpDoamin 
 type DeviceGroup struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
 	Name            string    `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name,omitempty"`
-	IpDomainDetails *IpDomain `protobuf:"bytes,2,opt,name=IpDomainDetails,proto3" json:"IpDomainDetails,omitempty"`
+	IpDomainDetails []IpDomain `protobuf:"bytes,2,opt,name=IpDomainDetails,proto3" json:"IpDomainDetails,omitempty"`
 	Imsi            []string  `protobuf:"bytes,3,rep,name=Imsi,proto3" json:"Imsi,omitempty"`
 }
 
@@ -916,7 +917,8 @@ func (x *DeviceGroup) GetName() string {
 	return ""
 }
 
-func (x *DeviceGroup) GetIpDomainDetails() *IpDomain {
+//C-DAC -->  change *IpDomain to []IpDoamin 
+func (x *DeviceGroup) GetIpDomainDetails() []IpDomain {
 	if x != nil {
 		return x.IpDomainDetails
 	}

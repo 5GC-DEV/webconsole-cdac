@@ -72,7 +72,7 @@ message NetworkSlice {
 
 message DeviceGroup {
   string Name = 1;
-  IpDomain IpDomainDetails = 2;
+  repeated IpDomain IpDomainDetails = 2;
   repeated string Imsi = 3;
 }
 
