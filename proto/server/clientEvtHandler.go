@@ -341,7 +341,7 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 		}*/
 
 		//C-DAC Start
-		var defaultQos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
+		//var defaultQos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
 		for _, ipDomainExpanded := range devGroupConfig.IpDomainExpanded {
 			if ipDomainExpanded.UeDnnQos != nil && ipDomainExpanded.UeDnnQos.TrafficClass != nil {
 				if defaultQos == nil {
