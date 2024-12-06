@@ -6,8 +6,10 @@
 package configapi
 
 import (
+	"bytes"
 	"io"
 	"math"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -72,9 +74,9 @@ func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
 	if groupName, exists = c.Params.Get("group-name"); exists {
 		configLog.Infof("Received group %v", groupName)
 	}
-	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	/*bodyBytes, _ := io.ReadAll(c.Request.Body)
 	configLog.Infof("Raw request body: %s", string(bodyBytes))
-	// c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Restore body for subsequent binding
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Restore body for subsequent binding
 
 	var err error
 	var request configmodels.DeviceGroups
@@ -85,6 +87,29 @@ func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
 	}
 	if err != nil {
 		configLog.Infof(" err %v", err)
+		return false
+	}
+	*/
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		configLog.Errorf("Failed to read request body: %v", err)
+		return false
+	}
+	if len(bodyBytes) == 0 {
+		configLog.Errorf("Request body is empty")
+		return false
+	}
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Restore the body for further use
+	s := strings.Split(c.GetHeader("Content-Type"), ";")
+	if len(s) == 0 || s[0] != "application/json" {
+		configLog.Errorf("Unsupported or missing Content-Type header")
+		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "Unsupported Content-Type"})
+		return false
+	}
+	var request configmodels.DeviceGroups
+	if err := c.ShouldBindJSON(&request); err != nil {
+		configLog.Errorf("Error binding JSON: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON payload"})
 		return false
 	}
 
@@ -124,6 +149,11 @@ func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
 	*/
 	//C-DAC - Start
 	procReq := req.Body.(configmodels.DeviceGroups)
+	procReq, ok := req.Body.(configmodels.DeviceGroups)
+	if !ok {
+		configLog.Errorf("Failed to assert request body as DeviceGroups")
+		return false
+	}
 	ipdomains := procReq.IpDomainExpanded // ipdomains is a slice
 
 	configLog.Infof("Imsis.size : %v, Imsis: %v", len(procReq.Imsis), procReq.Imsis)
