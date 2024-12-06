@@ -6,6 +6,7 @@
 package configapi
 
 import (
+	"io"
 	"math"
 	"slices"
 	"strings"
@@ -71,6 +72,9 @@ func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
 	if groupName, exists = c.Params.Get("group-name"); exists {
 		configLog.Infof("Received group %v", groupName)
 	}
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	configLog.Infof("Raw request body: %s", string(bodyBytes))
+	// c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Restore body for subsequent binding
 
 	var err error
 	var request configmodels.DeviceGroups
@@ -83,6 +87,7 @@ func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
 		configLog.Infof(" err %v", err)
 		return false
 	}
+
 	req := httpwrapper.NewRequest(c.Request, request)
 
 	configLog.Infof("Printing Device Group [%v] : %+v", groupName, req)
@@ -116,7 +121,7 @@ func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
 		}
 		configLog.Infof("  MbrUpLink :  %v ", ipdomain.UeDnnQos.DnnMbrUplink)
 	}
-*/
+	*/
 	//C-DAC - Start
 	procReq := req.Body.(configmodels.DeviceGroups)
 	ipdomains := procReq.IpDomainExpanded // ipdomains is a slice
@@ -125,30 +130,30 @@ func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
 	configLog.Infof("IP Domain Name : %v", procReq.IpDomainName)
 
 	if len(ipdomains) > 0 {
-    	for i, ipdomain := range ipdomains {
-        	configLog.Infof("IP Domain details [%d]: %+v", i, ipdomain)
-        	configLog.Infof("  DNN Name : %v", ipdomain.Dnn)
-        	configLog.Infof("  UE Pool  : %v", ipdomain.UeIpPool)
-        	configLog.Infof("  DNS Primary : %v", ipdomain.DnsPrimary)
-        	configLog.Infof("  DNS Secondary : %v", ipdomain.DnsSecondary)
-        	configLog.Infof("  IP MTU : %v", ipdomain.Mtu)
+		for i, ipdomain := range ipdomains {
+			configLog.Infof("IP Domain details [%d]: %+v", i, ipdomain)
+			configLog.Infof("  DNN Name : %v", ipdomain.Dnn)
+			configLog.Infof("  UE Pool  : %v", ipdomain.UeIpPool)
+			configLog.Infof("  DNS Primary : %v", ipdomain.DnsPrimary)
+			configLog.Infof("  DNS Secondary : %v", ipdomain.DnsSecondary)
+			configLog.Infof("  IP MTU : %v", ipdomain.Mtu)
 
-        	if ipdomain.UeDnnQos != nil {
-            	ipdomain.UeDnnQos.DnnMbrDownlink = convertToBps(ipdomain.UeDnnQos.DnnMbrDownlink, ipdomain.UeDnnQos.BitrateUnit)
-            	if ipdomain.UeDnnQos.DnnMbrDownlink < 0 {
-                	ipdomain.UeDnnQos.DnnMbrDownlink = math.MaxInt64
-            	}
-            	configLog.Infof("  MBR DownLink : %v", ipdomain.UeDnnQos.DnnMbrDownlink)
+			if ipdomain.UeDnnQos != nil {
+				ipdomain.UeDnnQos.DnnMbrDownlink = convertToBps(ipdomain.UeDnnQos.DnnMbrDownlink, ipdomain.UeDnnQos.BitrateUnit)
+				if ipdomain.UeDnnQos.DnnMbrDownlink < 0 {
+					ipdomain.UeDnnQos.DnnMbrDownlink = math.MaxInt64
+				}
+				configLog.Infof("  MBR DownLink : %v", ipdomain.UeDnnQos.DnnMbrDownlink)
 
-            	ipdomain.UeDnnQos.DnnMbrUplink = convertToBps(ipdomain.UeDnnQos.DnnMbrUplink, ipdomain.UeDnnQos.BitrateUnit)
-            	if ipdomain.UeDnnQos.DnnMbrUplink < 0 {
-                	ipdomain.UeDnnQos.DnnMbrUplink = math.MaxInt64
-            	}
-            	configLog.Infof("  MBR UpLink : %v", ipdomain.UeDnnQos.DnnMbrUplink)
-        	}
-    	}
+				ipdomain.UeDnnQos.DnnMbrUplink = convertToBps(ipdomain.UeDnnQos.DnnMbrUplink, ipdomain.UeDnnQos.BitrateUnit)
+				if ipdomain.UeDnnQos.DnnMbrUplink < 0 {
+					ipdomain.UeDnnQos.DnnMbrUplink = math.MaxInt64
+				}
+				configLog.Infof("  MBR UpLink : %v", ipdomain.UeDnnQos.DnnMbrUplink)
+			}
+		}
 	} else {
-    	configLog.Infof("No IP Domain Expanded data available.")
+		configLog.Infof("No IP Domain Expanded data available.")
 	}
 	// C-DAC END
 	var msg configmodels.ConfigMessage
