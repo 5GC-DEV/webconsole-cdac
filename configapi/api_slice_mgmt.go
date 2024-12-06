@@ -91,6 +91,7 @@ func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
 	}
 	*/
 	bodyBytes, err := io.ReadAll(c.Request.Body)
+	configLog.Infof("*** Raw request body: %s", string(bodyBytes))
 	if err != nil {
 		configLog.Errorf("Failed to read request body: %v", err)
 		return false
