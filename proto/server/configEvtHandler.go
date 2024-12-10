@@ -393,7 +393,7 @@ func updateAmPolicyData(imsi string) {
 	}
 }
 
-func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
+/* func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 	var smPolicyData models.SmPolicyData
 	var smPolicySnssaiData models.SmPolicySnssaiData
 	dnnData := map[string]models.SmPolicyDnnData{
@@ -413,6 +413,70 @@ func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
 	}
+} */
+
+// C-DAC
+func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
+	filter := bson.M{"ueId": "imsi-" + imsi}
+
+	// Retrieve existing data using RestfulAPIGetOne
+	existingData, err := dbadapter.CommonDBClient.RestfulAPIGetOne(smPolicyDataColl, filter)
+	var smPolicyData models.SmPolicyData
+
+	if err != nil {
+		if err.Error() == "document not found" { // Handle "not found" error specifically
+			smPolicyData = models.SmPolicyData{
+				SmPolicySnssaiData: make(map[string]models.SmPolicySnssaiData),
+			}
+		} else {
+			logger.DbLog.Warnf("Error retrieving SmPolicyData for imsi-%s: %v", imsi, err)
+			return
+		}
+	} else {
+		// Convert retrieved data to SmPolicyData structure
+		if err := fromBsonM(existingData, &smPolicyData); err != nil {
+			logger.DbLog.Warnf("Error converting existing data for imsi-%s: %v", imsi, err)
+			return
+		}
+	}
+
+	// Convert Snssai to Hex for use as the map key
+	snssaiKey := SnssaiModelsToHex(*snssai)
+
+	// Check if the Snssai already exists, otherwise initialize it
+	smPolicySnssaiData, exists := smPolicyData.SmPolicySnssaiData[snssaiKey]
+	if !exists {
+		smPolicySnssaiData = models.SmPolicySnssaiData{
+			Snssai:          snssai,
+			SmPolicyDnnData: make(map[string]models.SmPolicyDnnData),
+		}
+	}
+
+	// Add or update the DNN data
+	smPolicySnssaiData.SmPolicyDnnData[dnn] = models.SmPolicyDnnData{
+		Dnn: dnn,
+		// Populate additional fields as needed
+	}
+
+	// Update the SmPolicySnssaiData map
+	smPolicyData.SmPolicySnssaiData[snssaiKey] = smPolicySnssaiData
+
+	// Convert to BSON and update the document in the database
+	smPolicyDatBsonA := toBsonM(smPolicyData)
+	smPolicyDatBsonA["ueId"] = "imsi-" + imsi
+
+	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smPolicyDataColl, filter, smPolicyDatBsonA)
+	if errPost != nil {
+		logger.DbLog.Warnf("Error updating SmPolicyData for imsi-%s: %v", imsi, errPost)
+	}
+}
+
+func fromBsonM(input map[string]interface{}, output interface{}) error {
+	data, err := bson.Marshal(input)
+	if err != nil {
+		return err
+	}
+	return bson.Unmarshal(data, output)
 }
 
 func updateAmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
@@ -486,7 +550,7 @@ func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 	}
 }
 
-func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, imsi string) {
+/* func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, imsi string) {
 	smfSelData := models.SmfSelectionSubscriptionData{
 		SubscribedSnssaiInfos: map[string]models.SnssaiInfo{
 			SnssaiModelsToHex(*snssai): {
@@ -506,7 +570,54 @@ func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, im
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
 	}
+} */
+
+// C-DAC START
+func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, imsi string) {
+	// Define the filter
+	filter := bson.M{"ueId": "imsi-" + imsi, "servingPlmnId": mcc + mnc}
+
+	// Fetch the existing data
+	existingData, errGet := dbadapter.CommonDBClient.RestfulAPIGetOne(smfSelDataColl, filter)
+	if errGet != nil {
+		logger.DbLog.Warnf("Error fetching SMF selection data for imsi-%s, plmn-%s: %v", imsi, mcc+mnc, errGet)
+		existingData = map[string]interface{}{} // Initialize as empty if not found
+	}
+
+	// Convert to struct
+	var smfSelData models.SmfSelectionSubscriptionData
+	if existingData != nil {
+		fromBsonM(existingData, &smfSelData) // Convert BSON to struct
+	}
+
+	// Prepare the new DNN info
+	snssaiKey := SnssaiModelsToHex(*snssai)
+	if smfSelData.SubscribedSnssaiInfos == nil {
+		smfSelData.SubscribedSnssaiInfos = make(map[string]models.SnssaiInfo)
+	}
+	snssaiInfo, exists := smfSelData.SubscribedSnssaiInfos[snssaiKey]
+	if !exists {
+		snssaiInfo = models.SnssaiInfo{} // Initialize if not present
+	}
+
+	// Update DnnInfos
+	snssaiInfo.DnnInfos = append(snssaiInfo.DnnInfos, models.DnnInfo{Dnn: dnn})
+
+	// Assign back to the map
+	smfSelData.SubscribedSnssaiInfos[snssaiKey] = snssaiInfo
+
+	// Convert back to BSON and update
+	smfSelecDataBsonA := toBsonM(smfSelData)
+	smfSelecDataBsonA["ueId"] = "imsi-" + imsi
+	smfSelecDataBsonA["servingPlmnId"] = mcc + mnc
+
+	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smfSelDataColl, filter, smfSelecDataBsonA)
+	if errPost != nil {
+		logger.DbLog.Warnf("Error posting SMF selection data for imsi-%s, plmn-%s: %v", imsi, mcc+mnc, errPost)
+	}
 }
+
+// C-DAC END
 
 func isDeviceGroupExistInSlice(msg *Update5GSubscriberMsg) *configmodels.Slice {
 	for name, slice := range getSlices() {
