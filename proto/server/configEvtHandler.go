@@ -464,7 +464,7 @@ func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 	// Convert to BSON and update the document in the database
 	smPolicyDatBsonA := toBsonM(smPolicyData)
 	smPolicyDatBsonA["ueId"] = "imsi-" + imsi
-
+	logger.DbLog.Infof("*** Data to be sent to database - smPolicyData: %+v", smPolicyDatBsonA)
 	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smPolicyDataColl, filter, smPolicyDatBsonA)
 	if errPost != nil {
 		logger.DbLog.Warnf("Error updating SmPolicyData for imsi-%s: %v", imsi, errPost)
@@ -503,6 +503,7 @@ func updateAmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 			{"servingPlmnId": bson.M{"$exists": false}},
 		},
 	}
+	logger.DbLog.Infof("*** Data to be sent to database - AmProvisionedData: %+v", amDataBsonA)
 	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(amDataColl, filter, amDataBsonA)
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
@@ -610,7 +611,7 @@ func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, im
 	smfSelecDataBsonA := toBsonM(smfSelData)
 	smfSelecDataBsonA["ueId"] = "imsi-" + imsi
 	smfSelecDataBsonA["servingPlmnId"] = mcc + mnc
-
+	logger.DbLog.Infof("*** Data to be sent to database - smf selection: %+v", smfSelecDataBsonA)
 	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smfSelDataColl, filter, smfSelecDataBsonA)
 	if errPost != nil {
 		logger.DbLog.Warnf("Error posting SMF selection data for imsi-%s, plmn-%s: %v", imsi, mcc+mnc, errPost)
