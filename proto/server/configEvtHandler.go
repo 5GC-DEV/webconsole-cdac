@@ -583,13 +583,13 @@ func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, im
 		logger.DbLog.Warnf("Error fetching SMF selection data for imsi-%s, plmn-%s: %v", imsi, mcc+mnc, errGet)
 		existingData = map[string]interface{}{} // Initialize as empty if not found
 	}
-
 	// Convert to struct
 	var smfSelData models.SmfSelectionSubscriptionData
-	if existingData != nil {
-		fromBsonM(existingData, &smfSelData) // Convert BSON to struct
+	err := fromBsonM(existingData, &smfSelData) // Convert BSON to struct
+	if err != nil {
+		// Handle the error appropriately
+		logger.DbLog.Errorf("Error converting BSON to struct:", err)
 	}
-
 	// Prepare the new DNN info
 	snssaiKey := SnssaiModelsToHex(*snssai)
 	if smfSelData.SubscribedSnssaiInfos == nil {
