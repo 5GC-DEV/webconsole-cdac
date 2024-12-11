@@ -393,7 +393,7 @@ func updateAmPolicyData(imsi string) {
 	}
 }
 
-/* func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
+func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 	var smPolicyData models.SmPolicyData
 	var smPolicySnssaiData models.SmPolicySnssaiData
 	dnnData := map[string]models.SmPolicyDnnData{
@@ -409,14 +409,15 @@ func updateAmPolicyData(imsi string) {
 	smPolicyDatBsonA := toBsonM(smPolicyData)
 	smPolicyDatBsonA["ueId"] = "imsi-" + imsi
 	filter := bson.M{"ueId": "imsi-" + imsi}
+	logger.DbLog.Infof("*** Data to be sent to database - smPolicyData: %+v", smPolicyDatBsonA)
 	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smPolicyDataColl, filter, smPolicyDatBsonA)
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
 	}
-} */
+}
 
 // C-DAC
-func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
+/* func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 	filter := bson.M{"ueId": "imsi-" + imsi}
 
 	// Retrieve existing data using RestfulAPIGetOne
@@ -469,15 +470,15 @@ func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 	if errPost != nil {
 		logger.DbLog.Warnf("Error updating SmPolicyData for imsi-%s: %v", imsi, errPost)
 	}
-}
+}*/
 
-func fromBsonM(input map[string]interface{}, output interface{}) error {
+/*func fromBsonM(input map[string]interface{}, output interface{}) error {
 	data, err := bson.Marshal(input)
 	if err != nil {
 		return err
 	}
 	return bson.Unmarshal(data, output)
-}
+}*/
 
 func updateAmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
 	amData := models.AccessAndMobilitySubscriptionData{
@@ -545,13 +546,14 @@ func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 	smDataBsonA["ueId"] = "imsi-" + imsi
 	smDataBsonA["servingPlmnId"] = mcc + mnc
 	filter := bson.M{"ueId": "imsi-" + imsi, "servingPlmnId": mcc + mnc}
+	logger.DbLog.Infof("*** Data to be sent to database - SmProvisionedData: %+v", smDataBsonA)
 	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smDataColl, filter, smDataBsonA)
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
 	}
 }
 
-/* func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, imsi string) {
+func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, imsi string) {
 	smfSelData := models.SmfSelectionSubscriptionData{
 		SubscribedSnssaiInfos: map[string]models.SnssaiInfo{
 			SnssaiModelsToHex(*snssai): {
@@ -567,14 +569,15 @@ func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 	smfSelecDataBsonA["ueId"] = "imsi-" + imsi
 	smfSelecDataBsonA["servingPlmnId"] = mcc + mnc
 	filter := bson.M{"ueId": "imsi-" + imsi, "servingPlmnId": mcc + mnc}
+	logger.DbLog.Infof("*** Data to be sent to database - smf selection: %+v", smfSelecDataBsonA)
 	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smfSelDataColl, filter, smfSelecDataBsonA)
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
 	}
-} */
+}
 
 // C-DAC START
-func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, imsi string) {
+/* func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, imsi string) {
 	// Define the filter
 	filter := bson.M{"ueId": "imsi-" + imsi, "servingPlmnId": mcc + mnc}
 
@@ -616,7 +619,7 @@ func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, im
 	if errPost != nil {
 		logger.DbLog.Warnf("Error posting SMF selection data for imsi-%s, plmn-%s: %v", imsi, mcc+mnc, errPost)
 	}
-}
+} */
 
 // C-DAC END
 
