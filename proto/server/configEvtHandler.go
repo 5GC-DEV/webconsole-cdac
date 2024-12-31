@@ -513,6 +513,9 @@ func updateAmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 
 func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, dnn, imsi string) {
 	// TODO smData
+	logger.DbLog.Infof("*** QoS Data Received: %+v", qos)
+	logger.DbLog.Infof("*** Qci Data Received: %+v", qos.TrafficClass.Qci)
+	logger.DbLog.Infof("*** Data to be sent to database - SmProvisionedData: %+v", dnn)
 	smData := models.SessionManagementSubscriptionData{
 		SingleNssai: snssai,
 		DnnConfigurations: map[string]models.DnnConfiguration{
@@ -533,7 +536,7 @@ func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 					Uplink:   convertToString(uint64(qos.DnnMbrUplink)),
 				},
 				Var5gQosProfile: &models.SubscribedDefaultQos{
-					Var5qi: 9,
+					Var5qi: qos.TrafficClass.Qci,
 					Arp: &models.Arp{
 						PriorityLevel: 8,
 					},
