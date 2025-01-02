@@ -545,10 +545,19 @@ func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 			},
 		},
 	}
+	/*smDataBsonA := toBsonM(smData)
+	smDataBsonA["ueId"] = "imsi-" + imsi
+	smDataBsonA["servingPlmnId"] = mcc + mnc
+	filter := bson.M{"ueId": "imsi-" + imsi, "servingPlmnId": mcc + mnc,} */
 	smDataBsonA := toBsonM(smData)
 	smDataBsonA["ueId"] = "imsi-" + imsi
 	smDataBsonA["servingPlmnId"] = mcc + mnc
-	filter := bson.M{"ueId": "imsi-" + imsi, "servingPlmnId": mcc + mnc}
+	smDataBsonA["dnn"] = dnn // Include DNN in the document
+	filter := bson.M{
+		"ueId":          "imsi-" + imsi,
+		"servingPlmnId": mcc + mnc,
+		"dnn":           dnn, // Add DNN to the filter
+	}
 	logger.DbLog.Infof("*** Data to be sent to database - SmProvisionedData: %+v", smDataBsonA)
 	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smDataColl, filter, smDataBsonA)
 	if errPost != nil {
