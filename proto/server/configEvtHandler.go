@@ -823,8 +823,9 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 						continue // Skip processing for this device group
 					} else {
 						configLog.Infoln("Device group configuration not nil for dgName:", dgName)
+						configLog.Infoln("Device group configuration details:", devGroupConfig)
 						for _, imsi := range devGroupConfig.Imsis {
-							if len(confData.Msg.DevGroup.IpDomainExpanded) > 0 { // C-DAC
+							if confData.Msg.DevGroup != nil && len(confData.Msg.DevGroup.IpDomainExpanded) > 0 { // C-DAC
 								configLog.Infoln("IPDomain Expanded data not nill:", dgName)
 								for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded { // C-DAC
 									dnn := ipDomain.Dnn // C-DAC
@@ -836,6 +837,8 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 									updateSmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, dnn, imsi)
 									updateSmfSelectionProviosionedData(snssai, mcc, mnc, dnn, imsi)
 								}
+							} else {
+								configLog.Warnln("No IpDomainExpanded data or DevGroup is nil")
 							}
 						}
 					}
