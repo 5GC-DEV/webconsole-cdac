@@ -284,7 +284,7 @@ func getDeviceGroups() []*configmodels.DeviceGroups {
 	return deviceGroups
 }
 
-func getDeviceGroupByName(name string) *configmodels.DeviceGroups {
+/*func getDeviceGroupByName(name string) *configmodels.DeviceGroups {
 	filter := bson.M{"group-name": name}
 	devGroupDataInterface, errGetOne := dbadapter.CommonDBClient.RestfulAPIGetOne(devGroupDataColl, filter)
 	if errGetOne != nil {
@@ -295,6 +295,38 @@ func getDeviceGroupByName(name string) *configmodels.DeviceGroups {
 	if err != nil {
 		logger.DbLog.Errorf("could not unmarshall device group %v", devGroupDataInterface)
 	}
+	return &devGroupData
+}*/
+
+func getDeviceGroupByName(name string) *configmodels.DeviceGroups {
+	logger.DbLog.Infof("----- Fetching device group data for group-name: %s", name)
+	filter := bson.M{"group-name": name}
+
+	// Fetch data from the database
+	devGroupDataInterface, errGetOne := dbadapter.CommonDBClient.RestfulAPIGetOne(devGroupDataColl, filter)
+	if errGetOne != nil {
+		logger.DbLog.Warnf("--------- Failed to fetch device group data for group-name '%s': %v", name, errGetOne)
+		return nil
+	}
+
+	if devGroupDataInterface == nil {
+		logger.DbLog.Warnf("--------- No device group data found for group-name: %s", name)
+		return nil
+	}
+
+	// Log the raw data fetched
+	logger.DbLog.Infof("-------- Raw device group data fetched for group-name '%s': %v", name, devGroupDataInterface)
+
+	var devGroupData configmodels.DeviceGroups
+	err := json.Unmarshal(mapToByte(devGroupDataInterface), &devGroupData)
+	if err != nil {
+		logger.DbLog.Errorf("Failed to unmarshal device group data for group-name '%s': %v", name, err)
+		return nil
+	}
+
+	// Log the unmarshalled device group data
+	logger.DbLog.Infof("------Successfully unmarshalled device group data for group-name '%s': %+v", name, devGroupData)
+
 	return &devGroupData
 }
 
@@ -784,22 +816,25 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 				for _, dgName := range slice.SiteDeviceGroup {
 					configLog.Infoln("dgName : ", dgName)
 					devGroupConfig := getDeviceGroupByName(dgName)
-					if devGroupConfig != nil {
-						for _, imsi := range devGroupConfig.Imsis {
-							if len(confData.Msg.DevGroup.IpDomainExpanded) > 0 { // C-DAC
-								for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded { // C-DAC
-									dnn := ipDomain.Dnn // C-DAC
-									mcc := slice.SiteInfo.Plmn.Mcc
-									mnc := slice.SiteInfo.Plmn.Mnc
-									updateAmPolicyData(imsi)
-									updateSmPolicyData(snssai, dnn, imsi)
-									updateAmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, imsi)
-									updateSmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, dnn, imsi)
-									updateSmfSelectionProviosionedData(snssai, mcc, mnc, dnn, imsi)
-								}
+					if devGroupConfig == nil {
+						configLog.Warnln("Device group configuration is nil for dgName:", dgName)
+						continue // Skip processing for this device group
+					}
+					for _, imsi := range devGroupConfig.Imsis {
+						if len(confData.Msg.DevGroup.IpDomainExpanded) > 0 { // C-DAC
+							for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded { // C-DAC
+								dnn := ipDomain.Dnn // C-DAC
+								mcc := slice.SiteInfo.Plmn.Mcc
+								mnc := slice.SiteInfo.Plmn.Mnc
+								updateAmPolicyData(imsi)
+								updateSmPolicyData(snssai, dnn, imsi)
+								updateAmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, imsi)
+								updateSmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, dnn, imsi)
+								updateSmfSelectionProviosionedData(snssai, mcc, mnc, dnn, imsi)
 							}
 						}
 					}
+
 				}
 			}
 
