@@ -284,9 +284,10 @@ func getDeviceGroups() []*configmodels.DeviceGroups {
 	return deviceGroups
 }
 
-/*func getDeviceGroupByName(name string) *configmodels.DeviceGroups {
+func getDeviceGroupByName(name string) *configmodels.DeviceGroups {
 	filter := bson.M{"group-name": name}
 	devGroupDataInterface, errGetOne := dbadapter.CommonDBClient.RestfulAPIGetOne(devGroupDataColl, filter)
+	logger.DbLog.Infof("-------- Raw device group data fetched for group-name '%s': %v", name, devGroupDataInterface)
 	if errGetOne != nil {
 		logger.DbLog.Warnln(errGetOne)
 	}
@@ -295,10 +296,11 @@ func getDeviceGroups() []*configmodels.DeviceGroups {
 	if err != nil {
 		logger.DbLog.Errorf("could not unmarshall device group %v", devGroupDataInterface)
 	}
+	logger.DbLog.Infof("------Successfully unmarshalled device group data for group-name '%s': %+v", name, devGroupData)
 	return &devGroupData
-}*/
+}
 
-func getDeviceGroupByName(name string) *configmodels.DeviceGroups {
+/*func getDeviceGroupByName(name string) *configmodels.DeviceGroups {
 	logger.DbLog.Infof("----- Fetching device group data for group-name: %s", name)
 	filter := bson.M{"group-name": name}
 
@@ -328,7 +330,7 @@ func getDeviceGroupByName(name string) *configmodels.DeviceGroups {
 	logger.DbLog.Infof("------Successfully unmarshalled device group data for group-name '%s': %+v", name, devGroupData)
 
 	return &devGroupData
-}
+}*/
 
 func getSlices() []*configmodels.Slice {
 	rawSlices, errGetMany := dbadapter.CommonDBClient.RestfulAPIGetMany(sliceDataColl, nil)

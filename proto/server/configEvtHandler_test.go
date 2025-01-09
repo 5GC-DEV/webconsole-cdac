@@ -140,6 +140,8 @@ func Test_handleDeviceGroupPost(t *testing.T) {
 	// C-DAC END
 	factory.WebUIConfig.Configuration.Mode5G = true
 	for _, testGroup := range deviceGroups {
+		// Print the device group data
+		t.Logf("Testing with device group: %+v", testGroup)
 		configMsg := configmodels.ConfigMessage{
 			DevGroupName: testGroup.DeviceGroupName,
 			DevGroup:     &testGroup,
