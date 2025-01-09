@@ -825,7 +825,7 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 						configLog.Infoln("Device group configuration not nil for dgName:", dgName)
 						configLog.Infoln("Device group configuration details:", devGroupConfig)
 						for _, imsi := range devGroupConfig.Imsis {
-							if confData.Msg.DevGroup != nil && len(confData.Msg.DevGroup.IpDomainExpanded) > 0 { // C-DAC
+							/*if confData.Msg.DevGroup != nil && len(confData.Msg.DevGroup.IpDomainExpanded) > 0 { // C-DAC
 								configLog.Infoln("IPDomain Expanded data not nill:", dgName)
 								for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded { // C-DAC
 									dnn := ipDomain.Dnn // C-DAC
@@ -839,6 +839,29 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 								}
 							} else {
 								configLog.Warnln("No IpDomainExpanded data or DevGroup is nil")
+							} */
+							if confData.Msg.DevGroup != nil {
+								configLog.Infoln("confData.Msg.DevGroup is not nil")
+								configLog.Infoln("Processing IMSI:", imsi)
+								configLog.Infoln("confData.Msg.DevGroup.IpDomainExpanded:", fmt.Sprintf("%+v", confData.Msg.DevGroup.IpDomainExpanded))
+								if len(confData.Msg.DevGroup.IpDomainExpanded) > 0 {
+									configLog.Infoln("IPDomainExpanded is not empty")
+									for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded {
+										configLog.Infoln("Processing IP Domain:", fmt.Sprintf("%+v", ipDomain))
+										dnn := ipDomain.Dnn // C-DAC
+										mcc := slice.SiteInfo.Plmn.Mcc
+										mnc := slice.SiteInfo.Plmn.Mnc
+										updateAmPolicyData(imsi)
+										updateSmPolicyData(snssai, dnn, imsi)
+										updateAmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, imsi)
+										updateSmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, dnn, imsi)
+										updateSmfSelectionProviosionedData(snssai, mcc, mnc, dnn, imsi)
+									}
+								} else {
+									configLog.Warnln("IPDomainExpanded is empty")
+								}
+							} else {
+								configLog.Warnln("confData.Msg.DevGroup is nil")
 							}
 						}
 					}
