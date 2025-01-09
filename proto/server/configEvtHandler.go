@@ -844,7 +844,7 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 							if devGroupConfig.IpDomainExpanded != nil {
 								configLog.Infoln("confData.Msg.DevGroup is not nil")
 								configLog.Infoln("Processing IMSI:", imsi)
-								configLog.Infoln("confData.Msg.DevGroup.IpDomainExpanded:", fmt.Sprintf("%+v", confData.Msg.DevGroup.IpDomainExpanded))
+								// configLog.Infoln("confData.Msg.DevGroup.IpDomainExpanded:", fmt.Sprintf("%+v", confData.Msg.DevGroup.IpDomainExpanded))
 								if len(devGroupConfig.IpDomainExpanded) > 0 {
 									configLog.Infoln("IPDomainExpanded is not empty")
 									for _, ipDomain := range devGroupConfig.IpDomainExpanded {
