@@ -758,6 +758,7 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 				aimsis := getAddedImsisList(confData.Msg.DevGroup, confData.PrevDevGroup)
 				for _, imsi := range aimsis {
 					if len(confData.Msg.DevGroup.IpDomainExpanded) > 0 {
+						configLog.Infoln("-------- confData.Msg.DevGroup is not nil")
 						for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded {
 							dnn := ipDomain.Dnn
 							updateAmPolicyData(imsi)
