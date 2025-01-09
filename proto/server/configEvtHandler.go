@@ -836,7 +836,6 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 							}
 						}
 					}
-
 				}
 			}
 
