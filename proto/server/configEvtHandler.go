@@ -840,13 +840,13 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 							} else {
 								configLog.Warnln("No IpDomainExpanded data or DevGroup is nil")
 							} */
-							if confData.Msg.DevGroup != nil {
+							if devGroupConfig.IpDomainExpanded != nil {
 								configLog.Infoln("confData.Msg.DevGroup is not nil")
 								configLog.Infoln("Processing IMSI:", imsi)
 								configLog.Infoln("confData.Msg.DevGroup.IpDomainExpanded:", fmt.Sprintf("%+v", confData.Msg.DevGroup.IpDomainExpanded))
-								if len(confData.Msg.DevGroup.IpDomainExpanded) > 0 {
+								if len(devGroupConfig.IpDomainExpanded) > 0 {
 									configLog.Infoln("IPDomainExpanded is not empty")
-									for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded {
+									for _, ipDomain := range devGroupConfig.IpDomainExpanded {
 										configLog.Infoln("Processing IP Domain:", fmt.Sprintf("%+v", ipDomain))
 										dnn := ipDomain.Dnn // C-DAC
 										mcc := slice.SiteInfo.Plmn.Mcc
