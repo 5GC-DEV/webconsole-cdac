@@ -821,18 +821,21 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 					if devGroupConfig == nil {
 						configLog.Warnln("Device group configuration is nil for dgName:", dgName)
 						continue // Skip processing for this device group
-					}
-					for _, imsi := range devGroupConfig.Imsis {
-						if len(confData.Msg.DevGroup.IpDomainExpanded) > 0 { // C-DAC
-							for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded { // C-DAC
-								dnn := ipDomain.Dnn // C-DAC
-								mcc := slice.SiteInfo.Plmn.Mcc
-								mnc := slice.SiteInfo.Plmn.Mnc
-								updateAmPolicyData(imsi)
-								updateSmPolicyData(snssai, dnn, imsi)
-								updateAmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, imsi)
-								updateSmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, dnn, imsi)
-								updateSmfSelectionProviosionedData(snssai, mcc, mnc, dnn, imsi)
+					} else {
+						configLog.Infoln("Device group configuration not nil for dgName:", dgName)
+						for _, imsi := range devGroupConfig.Imsis {
+							if len(confData.Msg.DevGroup.IpDomainExpanded) > 0 { // C-DAC
+								configLog.Infoln("IPDomain Expanded data not nill:", dgName)
+								for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded { // C-DAC
+									dnn := ipDomain.Dnn // C-DAC
+									mcc := slice.SiteInfo.Plmn.Mcc
+									mnc := slice.SiteInfo.Plmn.Mnc
+									updateAmPolicyData(imsi)
+									updateSmPolicyData(snssai, dnn, imsi)
+									updateAmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, imsi)
+									updateSmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, dnn, imsi)
+									updateSmfSelectionProviosionedData(snssai, mcc, mnc, dnn, imsi)
+								}
 							}
 						}
 					}
