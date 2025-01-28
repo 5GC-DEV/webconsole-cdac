@@ -427,24 +427,94 @@ func updateAmPolicyData(imsi string) {
 	}
 }
 
-func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
-	var smPolicyData models.SmPolicyData
-	var smPolicySnssaiData models.SmPolicySnssaiData
-	dnnData := map[string]models.SmPolicyDnnData{
-		dnn: {
-			Dnn: dnn,
-		},
+/*
+	func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
+		var smPolicyData models.SmPolicyData
+		var smPolicySnssaiData models.SmPolicySnssaiData
+		dnnData := map[string]models.SmPolicyDnnData{
+			dnn: {
+				Dnn: dnn,
+			},
+		}
+		// smpolicydata
+		smPolicySnssaiData.Snssai = snssai
+		smPolicySnssaiData.SmPolicyDnnData = dnnData
+		smPolicyData.SmPolicySnssaiData = make(map[string]models.SmPolicySnssaiData)
+		smPolicyData.SmPolicySnssaiData[SnssaiModelsToHex(*snssai)] = smPolicySnssaiData
+		smPolicyDatBsonA := toBsonM(smPolicyData)
+		smPolicyDatBsonA["ueId"] = "imsi-" + imsi
+		filter := bson.M{"ueId": "imsi-" + imsi}
+		logger.DbLog.Infof("*** Data to be sent to database - smPolicyData: %+v", smPolicyDatBsonA)
+		_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smPolicyDataColl, filter, smPolicyDatBsonA)
+		if errPost != nil {
+			logger.DbLog.Warnln(errPost)
+		}
 	}
-	// smpolicydata
-	smPolicySnssaiData.Snssai = snssai
-	smPolicySnssaiData.SmPolicyDnnData = dnnData
-	smPolicyData.SmPolicySnssaiData = make(map[string]models.SmPolicySnssaiData)
-	smPolicyData.SmPolicySnssaiData[SnssaiModelsToHex(*snssai)] = smPolicySnssaiData
-	smPolicyDatBsonA := toBsonM(smPolicyData)
-	smPolicyDatBsonA["ueId"] = "imsi-" + imsi
+*/
+func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
+	// Define the filter to fetch the record
 	filter := bson.M{"ueId": "imsi-" + imsi}
-	logger.DbLog.Infof("*** Data to be sent to database - smPolicyData: %+v", smPolicyDatBsonA)
-	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smPolicyDataColl, filter, smPolicyDatBsonA)
+
+	// Fetch the existing record
+	existingRecord, err := dbadapter.CommonDBClient.RestfulAPIGetOne(smPolicyDataColl, filter)
+	if err != nil {
+		if err.Error() == "mongo: no documents in result" {
+			// No existing record, create a new one
+			logger.DbLog.Infof("No existing record for ueId: %s, creating a new one", imsi)
+			existingRecord = bson.M{
+				"ueId": imsi,
+				"smPolicySnssaiData": map[string]interface{}{
+					SnssaiModelsToHex(*snssai): map[string]interface{}{
+						"snssai":          snssai,
+						"smPolicyDnnData": map[string]interface{}{dnn: models.SmPolicyDnnData{Dnn: dnn}},
+					},
+				},
+			}
+		} else {
+			// Handle unexpected errors
+			logger.DbLog.Warnf("Failed to fetch existing record for ueId: %s, error: %v", imsi, err)
+			return
+		}
+	}
+
+	// Prepare the new DNN data
+	dnnData := models.SmPolicyDnnData{
+		Dnn: dnn,
+	}
+
+	// Merge the new DNN into the existing record
+	if smPolicySnssaiData, exists := existingRecord["smPolicySnssaiData"].(map[string]interface{}); exists {
+		snssaiHex := SnssaiModelsToHex(*snssai)
+		if snssaiEntry, found := smPolicySnssaiData[snssaiHex].(map[string]interface{}); found {
+			// Update smPolicyDnnData with the new DNN
+			if dnnMap, dnnExists := snssaiEntry["smPolicyDnnData"].(map[string]interface{}); dnnExists {
+				dnnMap[dnn] = dnnData
+			} else {
+				// If smPolicyDnnData does not exist, create it
+				snssaiEntry["smPolicyDnnData"] = map[string]interface{}{
+					dnn: dnnData,
+				}
+			}
+		} else {
+			// If Snssai entry does not exist, create it
+			smPolicySnssaiData[snssaiHex] = map[string]interface{}{
+				"snssai":          snssai,
+				"smPolicyDnnData": map[string]interface{}{dnn: dnnData},
+			}
+		}
+	} else {
+		// If smPolicySnssaiData does not exist, create it
+		existingRecord["smPolicySnssaiData"] = map[string]interface{}{
+			SnssaiModelsToHex(*snssai): map[string]interface{}{
+				"snssai":          snssai,
+				"smPolicyDnnData": map[string]interface{}{dnn: dnnData},
+			},
+		}
+	}
+
+	// Update the record back to the database
+	logger.DbLog.Infof("*** Data to be sent to database - smPolicyData: %+v", existingRecord)
+	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smPolicyDataColl, filter, existingRecord)
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
 	}
