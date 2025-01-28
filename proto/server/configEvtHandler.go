@@ -484,10 +484,19 @@ func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 
 	// Merge the new DNN into the existing record
 	if smPolicySnssaiData, exists := existingRecord["smPolicySnssaiData"].(map[string]interface{}); exists {
+		// Ensure that the map is initialized
+		if smPolicySnssaiData == nil {
+			smPolicySnssaiData = make(map[string]interface{})
+		}
+
 		snssaiHex := SnssaiModelsToHex(*snssai)
 		if snssaiEntry, found := smPolicySnssaiData[snssaiHex].(map[string]interface{}); found {
-			// Update smPolicyDnnData with the new DNN
+			// Ensure that smPolicyDnnData is initialized
 			if dnnMap, dnnExists := snssaiEntry["smPolicyDnnData"].(map[string]interface{}); dnnExists {
+				// Ensure the map is initialized before assigning to it
+				if dnnMap == nil {
+					dnnMap = make(map[string]interface{})
+				}
 				dnnMap[dnn] = dnnData
 			} else {
 				// If smPolicyDnnData does not exist, create it
