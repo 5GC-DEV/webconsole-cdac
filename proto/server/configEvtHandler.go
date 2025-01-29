@@ -513,6 +513,7 @@ func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 		}
 	} else {
 		// If smPolicySnssaiData does not exist, create it
+		existingRecord["smPolicySnssaiData"] = make(map[string]interface{})
 		existingRecord["smPolicySnssaiData"] = map[string]interface{}{
 			SnssaiModelsToHex(*snssai): map[string]interface{}{
 				"snssai":          snssai,
@@ -624,7 +625,7 @@ func updateAmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 	}
 }
 
-func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, dnn, imsi string) {
+/*func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, dnn, imsi string) {
 	// TODO smData
 	logger.DbLog.Infof("*** QoS Data Received: %+v", qos)
 	logger.DbLog.Infof("*** Qci Data Received: %+v", qos.TrafficClass.Qci)
@@ -658,10 +659,10 @@ func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 			},
 		},
 	}
-	/*smDataBsonA := toBsonM(smData)
-	smDataBsonA["ueId"] = "imsi-" + imsi
-	smDataBsonA["servingPlmnId"] = mcc + mnc
-	filter := bson.M{"ueId": "imsi-" + imsi, "servingPlmnId": mcc + mnc,} */
+	// smDataBsonA := toBsonM(smData)
+	// smDataBsonA["ueId"] = "imsi-" + imsi
+	// smDataBsonA["servingPlmnId"] = mcc + mnc
+	// filter := bson.M{"ueId": "imsi-" + imsi, "servingPlmnId": mcc + mnc,}
 	smDataBsonA := toBsonM(smData)
 	smDataBsonA["ueId"] = "imsi-" + imsi
 	smDataBsonA["servingPlmnId"] = mcc + mnc
@@ -676,9 +677,66 @@ func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
 	}
+} */
+
+func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, dnn, imsi string) {
+	logger.DbLog.Infof("*** QoS Data Received: %+v", qos)
+	logger.DbLog.Infof("*** Qci Data Received: %+v", qos.TrafficClass.Qci)
+	logger.DbLog.Infof("*** Data to be sent to database - SmProvisionedData: %+v", dnn)
+
+	smData := models.SessionManagementSubscriptionData{
+		SingleNssai: snssai,
+		DnnConfigurations: map[string]models.DnnConfiguration{
+			dnn: {
+				PduSessionTypes: &models.PduSessionTypes{
+					DefaultSessionType:  models.PduSessionType_IPV4,
+					AllowedSessionTypes: []models.PduSessionType{models.PduSessionType_IPV4},
+				},
+				SscModes: &models.SscModes{
+					DefaultSscMode: models.SscMode__1,
+					AllowedSscModes: []models.SscMode{
+						"SSC_MODE_2",
+						"SSC_MODE_3",
+					},
+				},
+				SessionAmbr: &models.Ambr{
+					Downlink: convertToString(uint64(qos.DnnMbrDownlink)),
+					Uplink:   convertToString(uint64(qos.DnnMbrUplink)),
+				},
+				Var5gQosProfile: &models.SubscribedDefaultQos{
+					Var5qi: qos.TrafficClass.Qci,
+					Arp: &models.Arp{
+						PriorityLevel: 8,
+					},
+					PriorityLevel: 8,
+				},
+			},
+		},
+	}
+	// Convert smData to bson.M
+	smDataBsonA := toBsonM(smData)
+	smDataBsonA["ueId"] = "imsi-" + imsi
+	smDataBsonA["servingPlmnId"] = mcc + mnc
+	smDataBsonA["dnn"] = dnn // Include DNN in the document
+
+	// Use filter to find the document based on UE ID and serving PLMN
+	filter := bson.M{
+		"ueId":          "imsi-" + imsi,
+		"servingPlmnId": mcc + mnc,
+		"dnn":           dnn, // Add DNN to the filter
+	}
+
+	// Log the data that will be sent to the database
+	logger.DbLog.Infof("*** Data to be sent to database - SmProvisionedData: %+v", smDataBsonA)
+
+	// Send the data to the database
+	err := dbadapter.CommonDBClient.RestfulAPIMergePatch(smDataColl, filter, smDataBsonA)
+	if err != nil {
+		logger.DbLog.Warnln("Failed to update DNN configuration:", err)
+	}
 }
 
-func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, imsi string) {
+/*func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, imsi string) {
 	smfSelData := models.SmfSelectionSubscriptionData{
 		SubscribedSnssaiInfos: map[string]models.SnssaiInfo{
 			SnssaiModelsToHex(*snssai): {
@@ -698,6 +756,44 @@ func updateSmfSelectionProviosionedData(snssai *models.Snssai, mcc, mnc, dnn, im
 	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smfSelDataColl, filter, smfSelecDataBsonA)
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
+	}
+}*/
+
+func updateSmfSelectionProvisionedData(snssai *models.Snssai, mcc, mnc, dnn, imsi string) {
+	smfSelData := models.SmfSelectionSubscriptionData{
+		SubscribedSnssaiInfos: map[string]models.SnssaiInfo{
+			SnssaiModelsToHex(*snssai): {
+				DnnInfos: []models.DnnInfo{
+					{
+						Dnn: dnn,
+					},
+				},
+			},
+		},
+	}
+	smfSelecDataBsonA := toBsonM(smfSelData)
+	smfSelecDataBsonA["ueId"] = "imsi-" + imsi
+	smfSelecDataBsonA["servingPlmnId"] = mcc + mnc
+
+	filter := bson.M{
+		"ueId":          "imsi-" + imsi,
+		"servingPlmnId": mcc + mnc,
+	}
+
+	// Use $addToSet to add DNN to the existing array (avoids duplicates)
+	updateData := bson.M{
+		"$addToSet": bson.M{
+			"subscribedSnssaiInfos." + SnssaiModelsToHex(*snssai) + ".dnnInfos": bson.M{
+				"dnn": dnn,
+			},
+		},
+	}
+
+	logger.DbLog.Infof("*** Data to be sent to database - smf selection: %+v", smfSelecDataBsonA)
+
+	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smfSelDataColl, filter, updateData)
+	if errPost != nil {
+		logger.DbLog.Warnln("Failed to update DNN:", errPost)
 	}
 }
 
@@ -844,7 +940,7 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 							updateSmPolicyData(snssai, dnn, imsi)
 							updateAmProvisionedData(snssai, ipDomain.UeDnnQos, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, imsi)
 							updateSmProvisionedData(snssai, ipDomain.UeDnnQos, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, dnn, imsi)
-							updateSmfSelectionProviosionedData(snssai, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, dnn, imsi)
+							updateSmfSelectionProvisionedData(snssai, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, dnn, imsi)
 						}
 					}
 				}
@@ -935,7 +1031,7 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 										updateSmPolicyData(snssai, dnn, imsi)
 										updateAmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, imsi)
 										updateSmProvisionedData(snssai, ipDomain.UeDnnQos, mcc, mnc, dnn, imsi)
-										updateSmfSelectionProviosionedData(snssai, mcc, mnc, dnn, imsi)
+										updateSmfSelectionProvisionedData(snssai, mcc, mnc, dnn, imsi)
 									}
 								} else {
 									configLog.Warnln("IPDomainExpanded is empty")
