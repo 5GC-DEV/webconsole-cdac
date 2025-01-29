@@ -427,31 +427,30 @@ func updateAmPolicyData(imsi string) {
 	}
 }
 
-/*
-	func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
-		var smPolicyData models.SmPolicyData
-		var smPolicySnssaiData models.SmPolicySnssaiData
-		dnnData := map[string]models.SmPolicyDnnData{
-			dnn: {
-				Dnn: dnn,
-			},
-		}
-		// smpolicydata
-		smPolicySnssaiData.Snssai = snssai
-		smPolicySnssaiData.SmPolicyDnnData = dnnData
-		smPolicyData.SmPolicySnssaiData = make(map[string]models.SmPolicySnssaiData)
-		smPolicyData.SmPolicySnssaiData[SnssaiModelsToHex(*snssai)] = smPolicySnssaiData
-		smPolicyDatBsonA := toBsonM(smPolicyData)
-		smPolicyDatBsonA["ueId"] = "imsi-" + imsi
-		filter := bson.M{"ueId": "imsi-" + imsi}
-		logger.DbLog.Infof("*** Data to be sent to database - smPolicyData: %+v", smPolicyDatBsonA)
-		_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smPolicyDataColl, filter, smPolicyDatBsonA)
-		if errPost != nil {
-			logger.DbLog.Warnln(errPost)
-		}
-	}
-*/
 func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
+	var smPolicyData models.SmPolicyData
+	var smPolicySnssaiData models.SmPolicySnssaiData
+	dnnData := map[string]models.SmPolicyDnnData{
+		dnn: {
+			Dnn: dnn,
+		},
+	}
+	// smpolicydata
+	smPolicySnssaiData.Snssai = snssai
+	smPolicySnssaiData.SmPolicyDnnData = dnnData
+	smPolicyData.SmPolicySnssaiData = make(map[string]models.SmPolicySnssaiData)
+	smPolicyData.SmPolicySnssaiData[SnssaiModelsToHex(*snssai)] = smPolicySnssaiData
+	smPolicyDatBsonA := toBsonM(smPolicyData)
+	smPolicyDatBsonA["ueId"] = "imsi-" + imsi
+	filter := bson.M{"ueId": "imsi-" + imsi}
+	logger.DbLog.Infof("*** Data to be sent to database - smPolicyData: %+v", smPolicyDatBsonA)
+	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smPolicyDataColl, filter, smPolicyDatBsonA)
+	if errPost != nil {
+		logger.DbLog.Warnln(errPost)
+	}
+}
+
+/*func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 	// Define the filter to fetch the record
 	filter := bson.M{"ueId": "imsi-" + imsi}
 
@@ -530,7 +529,7 @@ func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 		logger.DbLog.Warnln(errPost)
 	}
 }
-
+*/
 // C-DAC
 /* func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 	filter := bson.M{"ueId": "imsi-" + imsi}
