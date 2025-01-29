@@ -487,6 +487,7 @@ func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 		// Ensure that the map is initialized
 		if smPolicySnssaiData == nil {
 			smPolicySnssaiData = make(map[string]interface{})
+			existingRecord["smPolicySnssaiData"] = smPolicySnssaiData // Make sure the map is written back to the record
 		}
 
 		snssaiHex := SnssaiModelsToHex(*snssai)
@@ -496,6 +497,7 @@ func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 				// Ensure the map is initialized before assigning to it
 				if dnnMap == nil {
 					dnnMap = make(map[string]interface{})
+					snssaiEntry["smPolicyDnnData"] = dnnMap // Make sure the map is written back to the snssaiEntry
 				}
 				dnnMap[dnn] = dnnData
 			} else {
@@ -513,7 +515,6 @@ func updateSmPolicyData(snssai *models.Snssai, dnn string, imsi string) {
 		}
 	} else {
 		// If smPolicySnssaiData does not exist, create it
-		existingRecord["smPolicySnssaiData"] = make(map[string]interface{})
 		existingRecord["smPolicySnssaiData"] = map[string]interface{}{
 			SnssaiModelsToHex(*snssai): map[string]interface{}{
 				"snssai":          snssai,
