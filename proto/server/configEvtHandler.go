@@ -713,6 +713,7 @@ func updateSmProvisionedData(snssai *models.Snssai, qos *configmodels.DeviceGrou
 			},
 		},
 	}
+
 	// Convert smData to bson.M
 	smDataBsonA := toBsonM(smData)
 	smDataBsonA["ueId"] = "imsi-" + imsi
