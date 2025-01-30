@@ -827,8 +827,17 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 		}
 	} else {
 		// Convert existing record to struct
-		bsonBytes, _ := bson.Marshal(existingRecord)
-		_ = bson.Unmarshal(bsonBytes, &smData)
+		bsonBytes, err := bson.Marshal(existingRecord)
+		if err != nil {
+			logger.DbLog.Errorf("Failed to marshal existing record: %v", err)
+			return // Exit function to prevent using invalid data
+		}
+
+		err = bson.Unmarshal(bsonBytes, &smData)
+		if err != nil {
+			logger.DbLog.Errorf("Failed to unmarshal existing record: %v", err)
+			return // Exit function to prevent using invalid data
+		}
 	}
 
 	// Iterate over DNNs and add/update their configurations
