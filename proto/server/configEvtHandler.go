@@ -893,9 +893,9 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 
 	// Update the database
 	logger.DbLog.Infof("*** Data to be sent to database - SmProvisionedData: %+v", smDataBsonA)
-	jsonData, _ := json.MarshalIndent(smDataBsonA, "", "  ")
-	logger.DbLog.Infof("Final JSON before MongoDB update: %s", string(jsonData))
-	errPost := dbadapter.CommonDBClient.RestfulAPIMergePatch(smDataColl, filter, smDataBsonA)
+	// jsonData, _ := json.MarshalIndent(smDataBsonA, "", "  ")
+	// logger.DbLog.Infof("Final JSON before MongoDB update: %s", string(jsonData))
+	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(smDataColl, filter, smDataBsonA)
 	if errPost != nil {
 		logger.DbLog.Warnln("Failed to update DNN configuration:", errPost)
 	}
