@@ -1239,7 +1239,7 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 						continue
 					}
 
-					if devGroupConfig.IpDomainExpanded == nil || len(devGroupConfig.IpDomainExpanded) == 0 {
+					if len(devGroupConfig.IpDomainExpanded) == 0 {
 						configLog.Warnln("IPDomainExpanded is nil or empty for dgName:", dgName)
 						continue
 					}
