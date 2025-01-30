@@ -896,7 +896,6 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 	if errPost != nil {
 		logger.DbLog.Warnln("Failed to update DNN configuration:", errPost)
 	}
-
 }
 
 func aggregateQoS(qosList []configmodels.DeviceGroupsIpDomainExpandedUeDnnQos) configmodels.DeviceGroupsIpDomainExpandedUeDnnQos {
