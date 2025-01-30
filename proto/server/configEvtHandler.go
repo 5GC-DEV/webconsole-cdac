@@ -871,7 +871,22 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 	}
 
 	// Convert to BSON format
-	smDataBsonA := toBsonM(smData)
+	// Convert smData to BSON format properly
+	bsonBytes, err := bson.Marshal(smData)
+	if err != nil {
+		logger.DbLog.Errorf("Failed to marshal smData: %v", err)
+		return
+	}
+
+	// Unmarshal BSON into map[string]interface{} for updating MongoDB
+	var smDataBsonA map[string]interface{}
+	err = bson.Unmarshal(bsonBytes, &smDataBsonA)
+	if err != nil {
+		logger.DbLog.Errorf("Failed to unmarshal smData BSON: %v", err)
+		return
+	}
+
+	// Add required fields
 	smDataBsonA["ueId"] = "imsi-" + imsi
 	smDataBsonA["servingPlmnId"] = mcc + mnc
 
@@ -881,6 +896,7 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 	if errPost != nil {
 		logger.DbLog.Warnln("Failed to update DNN configuration:", errPost)
 	}
+
 }
 
 func aggregateQoS(qosList []configmodels.DeviceGroupsIpDomainExpandedUeDnnQos) configmodels.DeviceGroupsIpDomainExpandedUeDnnQos {
@@ -1098,6 +1114,7 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 			imsi := strings.ReplaceAll(confData.Msg.Imsi, "imsi-", "")
 			if confData.Msg.MsgMethod != configmodels.Delete_op {
 				logger.WebUILog.Debugln("insert/update AuthenticationSubscription ", imsi)
+				logger.WebUILog.Infoln("insert/update AuthenticationSubscription ", imsi)
 				filter := bson.M{"ueId": confData.Msg.Imsi}
 				authDataBsonA := toBsonM(confData.Msg.AuthSubData)
 				authDataBsonA["ueId"] = confData.Msg.Imsi
