@@ -840,9 +840,7 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 			logger.DbLog.Errorf("Failed to unmarshal existing record: %v", errUnmarshal)
 			return
 		}
-
 	}
-
 	// Iterate over DNNs and add/update their configurations
 	for dnn, ueDnnQosList := range dnnMap {
 		aggregatedQoS := aggregateQoS(ueDnnQosList) // Combine multiple QoS per DNN
