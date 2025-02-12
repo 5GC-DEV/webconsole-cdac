@@ -615,6 +615,7 @@ func clientEventMachine(client *clientNF) {
 
 			sliceDetails := &protos.NetworkSliceResponse{}
 			sliceDetails.RestartCounter = restartCounter
+			client.clientLog.Infof("********* Received slice details: %+v", sliceDetails)
 			if len(sliceDetails.NetworkSlice) > 0 && sliceDetails.NetworkSlice[0] != nil {
 				if sliceDetails.NetworkSlice[0].AppFilters != nil && len(sliceDetails.NetworkSlice[0].AppFilters.PccRuleBase) > 0 {
 					client.clientLog.Infof("********* Received pcc rule base details: %+v", sliceDetails.NetworkSlice[0].AppFilters.PccRuleBase[0])
