@@ -615,6 +615,25 @@ func clientEventMachine(client *clientNF) {
 
 			sliceDetails := &protos.NetworkSliceResponse{}
 			sliceDetails.RestartCounter = restartCounter
+			if len(sliceDetails.NetworkSlice) > 0 && sliceDetails.NetworkSlice[0] != nil {
+				if sliceDetails.NetworkSlice[0].AppFilters != nil && len(sliceDetails.NetworkSlice[0].AppFilters.PccRuleBase) > 0 {
+					client.clientLog.Infof("********* Received pcc rule base details: %+v", sliceDetails.NetworkSlice[0].AppFilters.PccRuleBase[0])
+				} else {
+					client.clientLog.Warn("********* No PccRuleBase found for NetworkSlice[0]")
+				}
+			} else {
+				client.clientLog.Warn("********* No NetworkSlice[0] found")
+			}
+
+			if len(sliceDetails.NetworkSlice) > 1 && sliceDetails.NetworkSlice[1] != nil {
+				if sliceDetails.NetworkSlice[1].AppFilters != nil && len(sliceDetails.NetworkSlice[1].AppFilters.PccRuleBase) > 1 {
+					client.clientLog.Infof("********* Received pcc rule base details: %+v", sliceDetails.NetworkSlice[1].AppFilters.PccRuleBase[1])
+				} else {
+					client.clientLog.Warn("********* No PccRuleBase found for NetworkSlice[1]")
+				}
+			} else {
+				client.clientLog.Warn("********* No NetworkSlice[1] found")
+			}
 
 			envMsg := &clientRspMsg{}
 			envMsg.networkSliceRspMsg = sliceDetails
