@@ -637,7 +637,26 @@ func clientEventMachine(client *clientNF) {
 
 			envMsg := &clientRspMsg{}
 			envMsg.networkSliceRspMsg = sliceDetails
+			if len(envMsg.networkSliceRspMsg.NetworkSlice) > 0 &&
+				envMsg.networkSliceRspMsg.NetworkSlice[0] != nil &&
+				envMsg.networkSliceRspMsg.NetworkSlice[0].AppFilters != nil &&
+				len(envMsg.networkSliceRspMsg.NetworkSlice[0].AppFilters.PccRuleBase) > 0 &&
+				envMsg.networkSliceRspMsg.NetworkSlice[0].AppFilters.PccRuleBase[0].Qos != nil {
 
+				client.clientLog.Infof("********* Var5Qi: %d", envMsg.networkSliceRspMsg.NetworkSlice[0].AppFilters.PccRuleBase[0].Qos.Var5Qi)
+			} else {
+				client.clientLog.Warn("********* Var5Qi is missing or structure is incomplete")
+			}
+			if len(envMsg.networkSliceRspMsg.NetworkSlice) > 1 &&
+				envMsg.networkSliceRspMsg.NetworkSlice[1] != nil &&
+				envMsg.networkSliceRspMsg.NetworkSlice[1].AppFilters != nil &&
+				len(envMsg.networkSliceRspMsg.NetworkSlice[1].AppFilters.PccRuleBase) > 1 &&
+				envMsg.networkSliceRspMsg.NetworkSlice[1].AppFilters.PccRuleBase[1].Qos != nil {
+
+				client.clientLog.Infof("********* Var5Qi: %d", envMsg.networkSliceRspMsg.NetworkSlice[1].AppFilters.PccRuleBase[1].Qos.Var5Qi)
+			} else {
+				client.clientLog.Warn("********* Var5Qi is missing or structure is incomplete")
+			}
 			if !client.configChanged && !cReqMsg.newClient {
 				client.clientLog.Infoln("No new update to be sent")
 				if client.resStream == nil {
