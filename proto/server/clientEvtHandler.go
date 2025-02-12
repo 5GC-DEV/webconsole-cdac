@@ -368,6 +368,8 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 	}
 	for _, ruleConfig := range sliceConf.ApplicationFilteringRules {
 		client.clientLog.Debugf("Received Rule config = %v ", ruleConfig)
+		client.clientLog.Infof("****  Received Rule config = %v ", ruleConfig)
+
 		pccRule := protos.PccRule{}
 
 		// RuleName
@@ -479,6 +481,16 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 	// Add to Config to be pushed to client
 	if len(appFilters.PccRuleBase) > 0 {
 		sliceProto.AppFilters = &appFilters
+	}
+
+	client.clientLog.Infof("Final AppFilter Rules: %d rules configured", len(appFilters.PccRuleBase))
+	for i, rule := range appFilters.PccRuleBase {
+		client.clientLog.Infof("Rule %d: ID=%s, Priority=%d, 5QI=%d, ARP=%d",
+			i, rule.RuleId, rule.Priority, rule.Qos.Var5Qi, rule.Qos.Arp.PL)
+		for j, flow := range rule.FlowInfos {
+			client.clientLog.Infof("   Flow %d: Desc=%s, Dir=%v, Status=%v",
+				j, flow.FlowDesc, flow.FlowDir, flow.FlowStatus)
+		}
 	}
 
 	return true
@@ -638,6 +650,8 @@ func clientEventMachine(client *clientNF) {
 
 			envMsg := &clientRspMsg{}
 			envMsg.networkSliceRspMsg = sliceDetails
+			client.clientLog.Infof("********* envMsg.networkSliceRspMsg: %+v", envMsg.networkSliceRspMsg)
+
 			if len(envMsg.networkSliceRspMsg.NetworkSlice) > 0 &&
 				envMsg.networkSliceRspMsg.NetworkSlice[0] != nil &&
 				envMsg.networkSliceRspMsg.NetworkSlice[0].AppFilters != nil &&
@@ -685,6 +699,7 @@ func clientEventMachine(client *clientNF) {
 				sliceProto := &protos.NetworkSlice{}
 				prevSlice := cReqMsg.lastSlice
 				slice := cReqMsg.slice
+				client.clientLog.Infof("********* envMsg.networkSliceRspMsg: %+v", envMsg.networkSliceRspMsg)
 
 				// slice Added
 				if prevSlice == nil && slice != nil {
