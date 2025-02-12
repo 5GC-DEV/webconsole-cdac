@@ -523,9 +523,7 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 	appFilters.PccRuleBase = []*protos.PccRule{} // Ensure it's a slice of PccRule
 
 	for _, rules := range ruleBaseMap {
-		for _, rule := range rules {
-			appFilters.PccRuleBase = append(appFilters.PccRuleBase, rule) // Append `PccRule`, not `PccRuleBase`
-		}
+		appFilters.PccRuleBase = append(appFilters.PccRuleBase, rules...) // Use variadic syntax
 	}
 
 	// AppFiltering rules not configured, so configuring default rule
