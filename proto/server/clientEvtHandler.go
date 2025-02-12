@@ -8,6 +8,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -366,7 +367,7 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 	appFilters := protos.AppFilterRules{
 		PccRuleBase: make([]*protos.PccRule, 0),
 	}
-	for _, ruleConfig := range sliceConf.ApplicationFilteringRules {
+	/*for _, ruleConfig := range sliceConf.ApplicationFilteringRules {
 		client.clientLog.Debugf("Received Rule config = %v ", ruleConfig)
 		client.clientLog.Infof("****  Received Rule config = %v ", ruleConfig)
 
@@ -450,7 +451,83 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 
 		// Add PCC rule to Rulebase
 		appFilters.PccRuleBase = append(appFilters.PccRuleBase, &pccRule)
+	}*/
+
+	// Map to store multiple rule bases
+	// Map to store multiple rule bases
+	ruleBaseMap := make(map[string][]*protos.PccRule)
+
+	for _, ruleConfig := range sliceConf.ApplicationFilteringRules {
+		client.clientLog.Debugf("Processing Rule: %v", ruleConfig)
+
+		pccRule := &protos.PccRule{
+			RuleId:   ruleConfig.RuleName,
+			Priority: ruleConfig.Priority,
+			Qos: &protos.PccRuleQos{
+				MaxbrUl: ruleConfig.AppMbrUplink,
+				MaxbrDl: ruleConfig.AppMbrDownlink,
+			},
+			FlowInfos: []*protos.PccFlowInfo{},
+		}
+
+		var var5qi, arpi int32
+		if ruleConfig.TrafficClass != nil {
+			var5qi = ruleConfig.TrafficClass.Qci
+			arpi = ruleConfig.TrafficClass.Arp
+		} else {
+			var5qi = 9
+			arpi = 1
+		}
+		if arpi > 15 {
+			arpi = 15
+		}
+
+		pccRule.Qos.Var5Qi = var5qi
+		pccRule.Qos.Arp = &protos.PccArp{
+			PL: arpi,
+			PC: protos.PccArpPc(1),
+			PV: protos.PccArpPv(1),
+		}
+
+		// Construct Flow Description
+		endp := ruleConfig.Endpoint
+		if strings.HasPrefix(endp, "0.0.0.0") {
+			endp = "any"
+		}
+		var desc string
+		if ruleConfig.Protocol == int32(protos.PccFlowTos_TCP) {
+			desc = fmt.Sprintf("permit out tcp from %s to assigned", endp)
+		} else if ruleConfig.Protocol == int32(protos.PccFlowTos_UDP) {
+			desc = fmt.Sprintf("permit out udp from %s to assigned", endp)
+		} else {
+			desc = fmt.Sprintf("permit out ip from %s to assigned", endp)
+		}
+
+		flowInfo := &protos.PccFlowInfo{
+			FlowDesc:        desc,
+			TosTrafficClass: "IPV4",
+			FlowDir:         protos.PccFlowDirection_BIDIRECTIONAL,
+			FlowStatus:      protos.PccFlowStatus_ENABLED,
+		}
+		if ruleConfig.Action == "deny" {
+			flowInfo.FlowStatus = protos.PccFlowStatus_DISABLED
+		}
+		pccRule.FlowInfos = append(pccRule.FlowInfos, flowInfo)
+
+		// Categorize PCC rule into different Rule Bases
+		ruleBaseKey := fmt.Sprintf("%s_PCC_RB_%d", sliceConf.SliceName, ruleConfig.Priority)
+		ruleBaseMap[ruleBaseKey] = append(ruleBaseMap[ruleBaseKey], pccRule)
 	}
+
+	// Convert the ruleBaseMap into a format that supports multiple PCC rule bases
+	appFilters.PccRuleBase = []*protos.PccRule{} // Ensure it's a slice of PccRule
+
+	for _, rules := range ruleBaseMap {
+		for _, rule := range rules {
+			appFilters.PccRuleBase = append(appFilters.PccRuleBase, rule) // Append `PccRule`, not `PccRuleBase`
+		}
+	}
+
 	// AppFiltering rules not configured, so configuring default rule
 	if len(sliceConf.ApplicationFilteringRules) == 0 {
 		pccRule := protos.PccRule{}
