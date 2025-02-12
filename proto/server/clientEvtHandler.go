@@ -324,7 +324,9 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 	nssai.Sd = sliceConf.SliceId.Sd
 	sliceProto.Nssai = nssai
 
-	var defaultQos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
+	// var defaultQos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
+	var defaultQosList []*configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
+
 	for d := 0; d < len(sliceConf.SiteDeviceGroup); d++ {
 		group := sliceConf.SiteDeviceGroup[d]
 		client.clientLog.Debugf("group %v, len of devgroupsConfigClient %v ", group, len(client.devgroupsConfigClient))
@@ -344,7 +346,7 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 
 		// C-DAC Start
 		// var defaultQos *configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
-		for _, ipDomainExpanded := range devGroupConfig.IpDomainExpanded {
+		/*for _, ipDomainExpanded := range devGroupConfig.IpDomainExpanded {
 			if ipDomainExpanded.UeDnnQos != nil && ipDomainExpanded.UeDnnQos.TrafficClass != nil {
 				if defaultQos == nil {
 					defaultQos = &configmodels.DeviceGroupsIpDomainExpandedUeDnnQos{}
@@ -353,7 +355,22 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 				defaultQos.TrafficClass.Qci = ipDomainExpanded.UeDnnQos.TrafficClass.Qci
 				defaultQos.TrafficClass.Arp = ipDomainExpanded.UeDnnQos.TrafficClass.Arp
 			}
+		}*/
+		for _, ipDomainExpanded := range devGroupConfig.IpDomainExpanded {
+			if ipDomainExpanded.UeDnnQos != nil && ipDomainExpanded.UeDnnQos.TrafficClass != nil {
+				// Create a new QoS entry for each iteration
+				newQos := &configmodels.DeviceGroupsIpDomainExpandedUeDnnQos{
+					TrafficClass: &configmodels.TrafficClassInfo{
+						Qci: ipDomainExpanded.UeDnnQos.TrafficClass.Qci,
+						Arp: ipDomainExpanded.UeDnnQos.TrafficClass.Arp,
+					},
+				}
+
+				// Append to the list instead of overwriting
+				defaultQosList = append(defaultQosList, newQos)
+			}
 		}
+
 		// C-DAC END
 
 		devGroupProto := &protos.DeviceGroup{}
@@ -365,7 +382,7 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 	fillSite(&sliceConf.SiteInfo, sliceProto.Site)
 
 	// Add Filtering rules
-	appFilters := protos.AppFilterRules{
+	/*appFilters := protos.AppFilterRules{
 		PccRuleBase: make([]*protos.PccRule, 0),
 	}
 	for _, ruleConfig := range sliceConf.ApplicationFilteringRules {
@@ -533,6 +550,104 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 	for _, rules := range ruleBaseMap {
 		appFilters.PccRuleBase = append(appFilters.PccRuleBase, rules...) // Use variadic syntax
 	}*/
+
+	// Add Filtering rules
+	appFilters := protos.AppFilterRules{
+		PccRuleBase: make([]*protos.PccRule, 0),
+	}
+
+	for _, ruleConfig := range sliceConf.ApplicationFilteringRules {
+		client.clientLog.Infof("****  Received Rule config = %v ", ruleConfig)
+
+		for _, defaultQos := range defaultQosList { // Iterate over defaultQosList
+			pccRule := protos.PccRule{}
+
+			// RuleName
+			pccRule.RuleId = ruleConfig.RuleName
+
+			// Rule Precedence
+			pccRule.Priority = ruleConfig.Priority
+
+			// Qos Info
+			ruleQos := protos.PccRuleQos{}
+			ruleQos.MaxbrUl = ruleConfig.AppMbrUplink
+			ruleQos.MaxbrDl = ruleConfig.AppMbrDownlink
+			ruleQos.GbrUl = 0
+			ruleQos.GbrDl = 0
+
+			var arpi, var5qi int32
+
+			if defaultQos != nil && defaultQos.TrafficClass != nil {
+				client.clientLog.Infof("****  ##default Qci = %v ", defaultQos.TrafficClass.Qci)
+				client.clientLog.Infof("****  ##default = %v ", defaultQos.TrafficClass.Arp)
+			}
+
+			if ruleConfig.TrafficClass != nil {
+				var5qi = ruleConfig.TrafficClass.Qci
+				arpi = ruleConfig.TrafficClass.Arp
+			} else if defaultQos != nil && defaultQos.TrafficClass != nil {
+				var5qi = defaultQos.TrafficClass.Qci
+				arpi = defaultQos.TrafficClass.Arp
+			} else {
+				var5qi = 9
+				arpi = 1
+			}
+
+			if arpi > 15 {
+				arpi = 15
+			}
+
+			ruleQos.Var5Qi = var5qi
+			arp := &protos.PccArp{}
+			arp.PL = arpi
+			arp.PC = protos.PccArpPc(1)
+			arp.PV = protos.PccArpPv(1)
+			ruleQos.Arp = arp
+			pccRule.Qos = &ruleQos
+
+			// Flow Info
+			pccRule.FlowInfos = make([]*protos.PccFlowInfo, 0)
+			var desc string
+			endp := ruleConfig.Endpoint
+			if strings.HasPrefix(endp, "0.0.0.0") {
+				endp = "any"
+			}
+
+			if ruleConfig.Protocol == int32(protos.PccFlowTos_TCP.Number()) {
+				if ruleConfig.StartPort == 0 && ruleConfig.EndPort == 0 {
+					desc = "permit out tcp from " + endp + " to assigned"
+				} else if factory.WebUIConfig.Configuration.SdfComp {
+					desc = "permit out tcp from " + endp + " " + strconv.FormatInt(int64(ruleConfig.StartPort), 10) + "-" + strconv.FormatInt(int64(ruleConfig.EndPort), 10) + " to assigned"
+				} else {
+					desc = "permit out tcp from " + endp + " to assigned " + strconv.FormatInt(int64(ruleConfig.StartPort), 10) + "-" + strconv.FormatInt(int64(ruleConfig.EndPort), 10)
+				}
+			} else if ruleConfig.Protocol == int32(protos.PccFlowTos_UDP.Number()) {
+				if ruleConfig.StartPort == 0 && ruleConfig.EndPort == 0 {
+					desc = "permit out udp from " + endp + " to assigned"
+				} else if factory.WebUIConfig.Configuration.SdfComp {
+					desc = "permit out udp from " + endp + " " + strconv.FormatInt(int64(ruleConfig.StartPort), 10) + "-" + strconv.FormatInt(int64(ruleConfig.EndPort), 10) + " to assigned"
+				} else {
+					desc = "permit out udp from " + endp + " to assigned " + strconv.FormatInt(int64(ruleConfig.StartPort), 10) + "-" + strconv.FormatInt(int64(ruleConfig.EndPort), 10)
+				}
+			} else {
+				desc = "permit out ip from " + endp + " to assigned"
+			}
+
+			flowInfo := protos.PccFlowInfo{}
+			flowInfo.FlowDesc = desc
+			flowInfo.TosTrafficClass = "IPV4"
+			flowInfo.FlowDir = protos.PccFlowDirection_BIDIRECTIONAL
+			if ruleConfig.Action == "deny" {
+				flowInfo.FlowStatus = protos.PccFlowStatus_DISABLED
+			} else {
+				flowInfo.FlowStatus = protos.PccFlowStatus_ENABLED
+			}
+			pccRule.FlowInfos = append(pccRule.FlowInfos, &flowInfo)
+
+			// Add PCC rule to Rulebase
+			appFilters.PccRuleBase = append(appFilters.PccRuleBase, &pccRule)
+		}
+	}
 
 	// AppFiltering rules not configured, so configuring default rule
 	if len(sliceConf.ApplicationFilteringRules) == 0 {
