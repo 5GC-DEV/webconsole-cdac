@@ -8,7 +8,8 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+
+	// "fmt"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -367,7 +368,7 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 	appFilters := protos.AppFilterRules{
 		PccRuleBase: make([]*protos.PccRule, 0),
 	}
-	/*for _, ruleConfig := range sliceConf.ApplicationFilteringRules {
+	for _, ruleConfig := range sliceConf.ApplicationFilteringRules {
 		client.clientLog.Debugf("Received Rule config = %v ", ruleConfig)
 		client.clientLog.Infof("****  Received Rule config = %v ", ruleConfig)
 
@@ -387,13 +388,20 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 		ruleQos.GbrUl = 0
 
 		var arpi, var5qi int32
-
+		if defaultQos != nil {
+			client.clientLog.Infof("****  ##default Qci = %v ", defaultQos.TrafficClass.Qci)
+			client.clientLog.Infof("****  ##default = %v ", defaultQos.TrafficClass.Arp)
+		}
 		if ruleConfig.TrafficClass != nil {
 			var5qi = ruleConfig.TrafficClass.Qci
 			arpi = ruleConfig.TrafficClass.Arp
+			client.clientLog.Infof("****  Qci = %v ", var5qi)
+			client.clientLog.Infof("****  arp = %v ", arpi)
 		} else if defaultQos != nil {
 			var5qi = defaultQos.TrafficClass.Qci
 			arpi = defaultQos.TrafficClass.Arp
+			client.clientLog.Infof("****  default Qci = %v ", var5qi)
+			client.clientLog.Infof("****  default = %v ", arpi)
 		} else {
 			var5qi = 9
 			arpi = 1
@@ -451,11 +459,11 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 
 		// Add PCC rule to Rulebase
 		appFilters.PccRuleBase = append(appFilters.PccRuleBase, &pccRule)
-	}*/
+	}
 
 	// Map to store multiple rule bases
 	// Map to store multiple rule bases
-	ruleBaseMap := make(map[string][]*protos.PccRule)
+	/*ruleBaseMap := make(map[string][]*protos.PccRule)
 
 	for _, ruleConfig := range sliceConf.ApplicationFilteringRules {
 		client.clientLog.Debugf("Processing Rule: %v", ruleConfig)
@@ -524,10 +532,11 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 
 	for _, rules := range ruleBaseMap {
 		appFilters.PccRuleBase = append(appFilters.PccRuleBase, rules...) // Use variadic syntax
-	}
+	}*/
 
 	// AppFiltering rules not configured, so configuring default rule
 	if len(sliceConf.ApplicationFilteringRules) == 0 {
+		client.clientLog.Infof("**** AppFiltering rules not configured, so configuring default rule ")
 		pccRule := protos.PccRule{}
 		// RuleName
 		pccRule.RuleId = "DefaultRule"
