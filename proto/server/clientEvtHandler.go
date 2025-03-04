@@ -8,8 +8,6 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-
-	// "fmt"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -856,7 +854,6 @@ func clientEventMachine(client *clientNF) {
 				envMsg.networkSliceRspMsg.NetworkSlice[0].AppFilters != nil &&
 				len(envMsg.networkSliceRspMsg.NetworkSlice[0].AppFilters.PccRuleBase) > 0 &&
 				envMsg.networkSliceRspMsg.NetworkSlice[0].AppFilters.PccRuleBase[0].Qos != nil {
-
 				client.clientLog.Infof("********* Var5Qi: %d", envMsg.networkSliceRspMsg.NetworkSlice[0].AppFilters.PccRuleBase[0].Qos.Var5Qi)
 			} else {
 				client.clientLog.Warn("********* Var5Qi is missing or structure is incomplete")
@@ -866,7 +863,6 @@ func clientEventMachine(client *clientNF) {
 				envMsg.networkSliceRspMsg.NetworkSlice[1].AppFilters != nil &&
 				len(envMsg.networkSliceRspMsg.NetworkSlice[1].AppFilters.PccRuleBase) > 1 &&
 				envMsg.networkSliceRspMsg.NetworkSlice[1].AppFilters.PccRuleBase[1].Qos != nil {
-
 				client.clientLog.Infof("********* Var5Qi: %d", envMsg.networkSliceRspMsg.NetworkSlice[1].AppFilters.PccRuleBase[1].Qos.Var5Qi)
 			} else {
 				client.clientLog.Warn("********* Var5Qi is missing or structure is incomplete")
