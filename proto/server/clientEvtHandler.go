@@ -296,7 +296,7 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 	var defaultQosList []*configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
 	for d := 0; d < len(sliceConf.SiteDeviceGroup); d++ {
 		group := sliceConf.SiteDeviceGroup[d]
-		client.clientLog.Debugf("group %v, len of devgroupsConfigClient %v ", group, len(client.devgroupsConfigClient))
+		client.clientLog.Infof("group %v, len of devgroupsConfigClient %v ", group, len(client.devgroupsConfigClient))
 		devGroupConfig := client.devgroupsConfigClient[group]
 		if devGroupConfig == nil {
 			client.clientLog.Infof("Did not find group %v ", group)
