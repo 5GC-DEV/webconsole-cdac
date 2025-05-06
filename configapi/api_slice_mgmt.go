@@ -59,6 +59,7 @@ func convertToBps(val int64, unit string) (bitrate int64) {
 }
 
 func DeviceGroupPostHandler(c *gin.Context, msgOp int) bool {
+	logger.ConfigLog.Infof("**** Device group post handler")
 	groupName, _ := c.Params.Get("group-name")
 	if !isValidName(groupName) {
 		logger.ConfigLog.Errorf("invalid Device Group name %s. Name needs to match the following regular expression: %s", groupName, NAME_PATTERN)

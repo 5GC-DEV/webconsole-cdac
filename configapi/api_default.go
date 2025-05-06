@@ -111,7 +111,7 @@ func DeviceGroupGroupNameDelete(c *gin.Context) {
 
 // DeviceGroupGroupNamePut -
 func DeviceGroupGroupNamePut(c *gin.Context) {
-	logger.ConfigLog.Debugf("DeviceGroupGroupNamePut")
+	logger.ConfigLog.Infof("DeviceGroupGroupNamePut")
 	if ret := DeviceGroupPostHandler(c, configmodels.Put_op); ret {
 		c.JSON(http.StatusOK, gin.H{})
 	} else {
@@ -139,7 +139,7 @@ func DeviceGroupGroupNamePatch(c *gin.Context) {
 // @Failure      500  {object}  nil  "Error creating device group"
 // @Router       /config/v1/device-group/{deviceGroupName}  [post]
 func DeviceGroupGroupNamePost(c *gin.Context) {
-	logger.ConfigLog.Debugf("DeviceGroupGroupNamePost")
+	logger.ConfigLog.Infof("DeviceGroupGroupNamePost")
 	if ret := DeviceGroupPostHandler(c, configmodels.Post_op); ret {
 		c.JSON(http.StatusOK, gin.H{})
 	} else {
