@@ -292,17 +292,20 @@ func fillSlice(client *clientNF, sliceName string, sliceConf *configmodels.Slice
 	nssai.Sst = sliceConf.SliceId.Sst
 	nssai.Sd = sliceConf.SliceId.Sd
 	sliceProto.Nssai = nssai
-
+	client.clientLog.Infof("devgroupsConfigClient has %d entries", len(client.devgroupsConfigClient))
+	for k := range client.devgroupsConfigClient {
+		client.clientLog.Infof("Configured device group: %s", k)
+	}
 	var defaultQosList []*configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
 	for d := 0; d < len(sliceConf.SiteDeviceGroup); d++ {
 		group := sliceConf.SiteDeviceGroup[d]
 		client.clientLog.Infof("group %v, len of devgroupsConfigClient %v ", group, len(client.devgroupsConfigClient))
+		client.clientLog.Infof("devgroupsConfigClient has %d entries", len(client.devgroupsConfigClient))
 		devGroupConfig := client.devgroupsConfigClient[group]
 		if devGroupConfig == nil {
 			client.clientLog.Infof("Did not find group %v ", group)
 			return false
 		}
-
 		for _, ipDomainExpanded := range devGroupConfig.IpDomainExpanded {
 			if ipDomainExpanded.UeDnnQos != nil && ipDomainExpanded.UeDnnQos.TrafficClass != nil {
 				// Create a new QoS entry for each iteration
