@@ -51,7 +51,7 @@ func init() {
 func configHandler(configMsgChan chan *configmodels.ConfigMessage, configReceived chan bool) {
 	// Start Goroutine which will listens for subscriber config updates
 	// and update the mongoDB. Only for 5G
-	subsUpdateChan := make(chan *Update5GSubscriberMsg, 100)
+	subsUpdateChan := make(chan *Update5GSubscriberMsg, 10)
 	if factory.WebUIConfig.Configuration.Mode5G {
 		go Config5GUpdateHandle(subsUpdateChan)
 	}
@@ -661,7 +661,6 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 						logger.ConfigLog.Warnln("No IP Domain data available for IMSI:", imsi)
 						continue
 					}
-					logger.ConfigLog.Infoln("Processing IMSI:", imsi)
 					// Collect all DNNs and QoS mappings for the IMSI
 					dnnMap := make(map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos)
 					for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded {
