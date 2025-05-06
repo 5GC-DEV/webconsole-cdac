@@ -51,7 +51,7 @@ func init() {
 func configHandler(configMsgChan chan *configmodels.ConfigMessage, configReceived chan bool) {
 	// Start Goroutine which will listens for subscriber config updates
 	// and update the mongoDB. Only for 5G
-	subsUpdateChan := make(chan *Update5GSubscriberMsg, 10)
+	subsUpdateChan := make(chan *Update5GSubscriberMsg, 100)
 	if factory.WebUIConfig.Configuration.Mode5G {
 		go Config5GUpdateHandle(subsUpdateChan)
 	}
