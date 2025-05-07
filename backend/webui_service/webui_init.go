@@ -184,7 +184,7 @@ func (webui *WEBUI) Start() {
 
 	go metrics.InitMetrics()
 
-	configMsgChan := make(chan *configmodels.ConfigMessage, 10)
+	configMsgChan := make(chan *configmodels.ConfigMessage, 100)
 	configapi.SetChannel(configMsgChan)
 
 	subconfig_router.Use(cors.New(cors.Config{
