@@ -163,7 +163,6 @@ func (m *MockMongoClientFoundNetworkSlice) RestfulAPIGetOne(coll string, filter 
 }
 
 func deviceGroup(name string) configmodels.DeviceGroups {
-	// Define the first traffic class and QoS
 	traffic_class1 := configmodels.TrafficClassInfo{
 		Name: "platinum",
 		Qci:  8,
@@ -215,7 +214,7 @@ func deviceGroup(name string) configmodels.DeviceGroups {
 		Imsis:            []string{"1234", "5678"},
 		SiteInfo:         "demo",
 		IpDomainName:     "pool1",
-		IpDomainExpanded: []configmodels.DeviceGroupsIpDomainExpanded{ipdomain1, ipdomain2}, // Multiple domains
+		IpDomainExpanded: []configmodels.DeviceGroupsIpDomainExpanded{ipdomain1, ipdomain2},
 	}
 
 	return deviceGroup

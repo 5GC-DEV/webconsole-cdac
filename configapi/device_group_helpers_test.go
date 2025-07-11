@@ -63,8 +63,12 @@ func Test_handleDeviceGroupPost(t *testing.T) {
 		deviceGroup("group_no_imsis"), deviceGroup("group_no_traf_class"), deviceGroup("group_no_qos"),
 	}
 	deviceGroups[2].Imsis = []string{}
-	deviceGroups[3].IpDomainExpanded.UeDnnQos.TrafficClass = nil
-	deviceGroups[4].IpDomainExpanded.UeDnnQos = nil
+	if len(deviceGroups[3].IpDomainExpanded) > 0 {
+		deviceGroups[3].IpDomainExpanded[0].UeDnnQos.TrafficClass = nil
+	}
+	if len(deviceGroups[4].IpDomainExpanded) > 0 {
+		deviceGroups[4].IpDomainExpanded[0].UeDnnQos = nil
+	}
 	factory.WebUIConfig.Configuration.Mode5G = true
 
 	for _, testGroup := range deviceGroups {
@@ -157,8 +161,12 @@ func Test_handleDeviceGroupPost_alreadyExists(t *testing.T) {
 		deviceGroup("group_no_qos"),
 	}
 	deviceGroups[2].Imsis = []string{}
-	deviceGroups[3].IpDomainExpanded.UeDnnQos.TrafficClass = nil
-	deviceGroups[4].IpDomainExpanded.UeDnnQos = nil
+	if len(deviceGroups[3].IpDomainExpanded) > 0 {
+		deviceGroups[3].IpDomainExpanded[0].UeDnnQos.TrafficClass = nil
+	}
+	if len(deviceGroups[4].IpDomainExpanded) > 0 {
+		deviceGroups[4].IpDomainExpanded[0].UeDnnQos = nil
+	}
 
 	factory.WebUIConfig.Configuration.Mode5G = true
 

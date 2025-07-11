@@ -23,5 +23,9 @@ type DeviceGroups struct {
 
 	IpDomainName string `json:"ip-domain-name,omitempty"`
 
+<<<<<<< HEAD
 	IpDomainExpanded []DeviceGroupsIpDomainExpanded `json:"ip-domains,omitempty"`
+=======
+	IpDomainExpanded []DeviceGroupsIpDomainExpanded `json:"ip-domain-expanded,omitempty"`
+>>>>>>> temp-merge-branch-anaswara
 }

@@ -237,20 +237,21 @@ func buildSessionManagementConfig(slice configmodels.Slice, deviceGroupMap map[s
 
 func extractIpDomains(groupNames []string, deviceGroupMap map[string]configmodels.DeviceGroups) []nfConfigApi.IpDomain {
 	ipDomains := make([]nfConfigApi.IpDomain, 0, len(groupNames))
-
 	for _, name := range groupNames {
 		dg, exists := deviceGroupMap[name]
 		if !exists {
 			logger.NfConfigLog.Warnf("Device group %s not found", name)
 			continue
 		}
-		ip := nfConfigApi.NewIpDomain(
-			dg.IpDomainExpanded.Dnn,
-			dg.IpDomainExpanded.DnsPrimary,
-			dg.IpDomainExpanded.UeIpPool,
-			dg.IpDomainExpanded.Mtu,
-		)
-		ipDomains = append(ipDomains, *ip)
+		for _, ipDomainExp := range dg.IpDomainExpanded {
+			ip := nfConfigApi.NewIpDomain(
+				ipDomainExp.Dnn,
+				ipDomainExp.DnsPrimary,
+				ipDomainExp.UeIpPool, // Now accessing the correct field from the slice element
+				ipDomainExp.Mtu,
+			)
+			ipDomains = append(ipDomains, *ip)
+		}
 	}
 	return ipDomains
 }

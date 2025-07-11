@@ -8,7 +8,6 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/omec-project/config5g v1.6.2
 	github.com/omec-project/openapi v1.5.0
 	github.com/omec-project/util v1.3.2
 	github.com/prometheus/client_golang v1.22.0
@@ -25,7 +24,7 @@ require (
 )
 
 require (
-	github.com/5GC-DEV/config5g-cdac v1.4.2-0.20250430103952-0383bf5b24b8 // indirect
+	github.com/5GC-DEV/config5g-cdac v0.2.1
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
