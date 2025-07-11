@@ -252,32 +252,34 @@ func Test_handleDeviceGroupDelete(t *testing.T) {
 }
 
 const DEVICE_GROUP_CONFIG = `{
-  "group-name": "string",
-  "imsis": [
-    "string"
-  ],
-  "ip-domain-expanded": {
-    "dnn": "string",
-    "dns-primary": "string",
-    "dns-secondary": "string",
-    "mtu": 0,
-    "ue-dnn-qos": {
-      "bitrate-unit": "string",
-      "dnn-mbr-downlink": 0,
-      "dnn-mbr-uplink": 0,
-      "traffic-class": {
-        "arp": 0,
-        "name": "string",
-        "pdb": 0,
-        "pelr": 0,
-        "qci": 0
-      }
-    },
-    "ue-ip-pool": "string"
-  },
-  "ip-domain-name": "string",
-  "site-info": "string"
-}`
+	"group-name": "string",
+	"imsis": [
+	  "string"
+	],
+	"ip-domain-expanded": [
+	  {
+		"dnn": "string",
+		"dns-primary": "string",
+		"dns-secondary": "string",
+		"mtu": 0,
+		"ue-dnn-qos": {
+		  "bitrate-unit": "string",
+		  "dnn-mbr-downlink": 0,
+		  "dnn-mbr-uplink": 0,
+		  "traffic-class": {
+			"arp": 0,
+			"name": "string",
+			"pdb": 0,
+			"pelr": 0,
+			"qci": 0
+		  }
+		},
+		"ue-ip-pool": "string"
+	  }
+	],
+	"ip-domain-name": "string",
+	"site-info": "string"
+  }`
 
 func TestDeviceGroupPostHandler_DeviceGroupNameValidation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
