@@ -252,8 +252,6 @@ func fillSite(siteInfoConf *configmodels.SliceSiteInfo, siteInfoProto *protos.Si
 
 func fillDeviceGroup(groupName string, devGroupConfig *configmodels.DeviceGroups, devGroupProto *protos.DeviceGroup) {
 	devGroupProto.Name = groupName
-	ipdomain := &protos.IpDomain{}
-	ipdomain.Name = devGroupConfig.IpDomainName
 	for _, ipDomainExpanded := range devGroupConfig.IpDomainExpanded {
 		ipdomain := &protos.IpDomain{}
 		ipdomain.Name = devGroupConfig.IpDomainName
