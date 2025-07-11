@@ -11,18 +11,13 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/omec-project/webconsole/backend/auth"
 )
 
-func AddApiService(engine *gin.Engine) *gin.RouterGroup {
+func AddApiService(engine *gin.Engine, middlewares ...gin.HandlerFunc) *gin.RouterGroup {
 	group := engine.Group("/api")
-	addRoutes(group, apiRoutes)
-	return group
-}
-
-func AddApiServiceWithAuthorization(engine *gin.Engine, jwtSecret []byte) *gin.RouterGroup {
-	group := engine.Group("/api")
-	group.Use(auth.AdminOrUserAuthMiddleware(jwtSecret))
+	if len(middlewares) > 0 {
+		group.Use(middlewares...)
+	}
 	addRoutes(group, apiRoutes)
 	return group
 }
@@ -59,7 +54,7 @@ var apiRoutes = Routes{
 	{
 		"PutSubscriberByID",
 		http.MethodPut,
-		"/subscriber/:ueId/:servingPlmnId",
+		"/subscriber/:ueId",
 		PutSubscriberByID,
 	},
 
@@ -73,7 +68,7 @@ var apiRoutes = Routes{
 	{
 		"PatchSubscriberByID",
 		http.MethodPatch,
-		"/subscriber/:ueId/:servingPlmnId",
+		"/subscriber/:ueId",
 		PatchSubscriberByID,
 	},
 

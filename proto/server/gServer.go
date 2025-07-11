@@ -12,8 +12,10 @@ import (
 	"time"
 
 	protos "github.com/5GC-DEV/config5g-cdac/proto/sdcoreConfig"
+	"github.com/omec-project/openapi/models"
 	"github.com/omec-project/webconsole/backend/factory"
 	"github.com/omec-project/webconsole/backend/logger"
+	"github.com/omec-project/webconsole/configapi"
 	"github.com/omec-project/webconsole/configmodels"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
@@ -53,6 +55,14 @@ func StartServer(host string, confServ *ConfigServer, configMsgChan chan *config
 	// we wish to start grpc server only if we received at least one config
 	// from the simapp/ROC
 	configReady := make(chan bool)
+	if factory.WebUIConfig.Configuration.Mode5G {
+		logger.WebUILog.Debugln("instantiating in-DB subscriber authentication")
+		subscriberAuthData = configapi.DatabaseSubscriberAuthenticationData{}
+	} else {
+		logger.WebUILog.Debugln("instantiating in-memory subscriber authentication")
+		configapi.ImsiData = make(map[string]*models.AuthenticationSubscription)
+		subscriberAuthData = configapi.MemorySubscriberAuthenticationData{}
+	}
 	go configHandler(configMsgChan, configReady)
 	ready := <-configReady
 

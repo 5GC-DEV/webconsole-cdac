@@ -97,6 +97,55 @@ const docTemplate = `{
                     }
                 }
             },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update subscriber information by IMSI (UE ID)",
+                "tags": [
+                    "Subscribers"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "IMSI (UE ID)",
+                        "name": "imsi",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated subscriber details",
+                        "name": "content",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configmodels.SubsData"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Subscriber updated successfully"
+                    },
+                    "400": {
+                        "description": "Invalid subscriber content"
+                    },
+                    "401": {
+                        "description": "Authorization failed"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Subscriber not found"
+                    },
+                    "500": {
+                        "description": "Error updating subscriber"
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -137,6 +186,9 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden"
+                    },
+                    "409": {
+                        "description": "Subscriber already exists"
                     },
                     "500": {
                         "description": "Error creating subscriber"
@@ -255,6 +307,9 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Page not found if enableAuthentication is disabled"
+                    },
+                    "409": {
+                        "description": "User account already exists"
                     },
                     "500": {
                         "description": "Failed to create the user account"
@@ -554,16 +609,13 @@ const docTemplate = `{
                         "description": "Device group deleted successfully"
                     },
                     "400": {
-                        "description": "Invalid device group name provided"
+                        "description": "Bad request"
                     },
                     "401": {
                         "description": "Authorization failed"
                     },
                     "403": {
                         "description": "Forbidden"
-                    },
-                    "500": {
-                        "description": "Error deleting device group"
                     }
                 }
             }
@@ -629,7 +681,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "gNB sucessfully created"
+                        "description": "gNB successfully created"
                     },
                     "400": {
                         "description": "Bad request"
@@ -680,7 +732,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "gNB sucessfully created"
+                        "description": "gNB successfully created"
                     },
                     "400": {
                         "description": "Bad request"
@@ -1273,7 +1325,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tac": {
-                    "type": "string"
+                    "type": "integer"
                 }
             }
         },
@@ -1284,7 +1336,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tac": {
-                    "type": "string"
+                    "type": "integer"
                 }
             }
         },
@@ -1303,7 +1355,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "tac": {
-                    "type": "string"
+                    "type": "integer"
                 }
             }
         },
@@ -1448,6 +1500,9 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "configmodels.SubsData": {
+            "type": "object"
         },
         "configmodels.SubsListIE": {
             "type": "object",

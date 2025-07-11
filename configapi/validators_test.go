@@ -3,20 +3,28 @@
 
 package configapi
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestValidateName(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name     string
 		expected bool
 	}{
-		{"validName", true},
+		{genLongString(256), true},
 		{"Valid-Name", true},
 		{"Valid_Name", true},
 		{"{invalid_name}", false},
 		{"invalid&name", false},
 		{"invalidName(R)", false},
+		{"-invalidName", false},
+		{"_invalidName", false},
+		{"4invalidName", false},
+		{"-_invalid", false},
 		{"", false},
+		{genLongString(257), false},
 	}
 
 	for _, tc := range testCases {
@@ -28,11 +36,12 @@ func TestValidateName(t *testing.T) {
 }
 
 func TestValidateFQDN(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		fqdn     string
 		expected bool
 	}{
 		{"upf-external.sdcore.svc.cluster.local", true},
+		{"123-external.sdcore.svc.cluster.local", true},
 		{"my-upf.my-domain.com", true},
 		{"www.my-upf.com", true},
 		{"some-upf-name", false},
@@ -40,6 +49,7 @@ func TestValidateFQDN(t *testing.T) {
 		{"{upf-external}.sdcore.svc.cluster.local", false},
 		{"http://my-upf.my-domain.com", false},
 		{"my-domain.com/my-upf", false},
+		{"-upf-external.sdcore.svc.cluster.local", false},
 		{"", false},
 	}
 
@@ -52,7 +62,7 @@ func TestValidateFQDN(t *testing.T) {
 }
 
 func TestValidateUpfPort(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		port     string
 		expected bool
 	}{
@@ -76,25 +86,26 @@ func TestValidateUpfPort(t *testing.T) {
 }
 
 func TestValidateGnbTac(t *testing.T) {
-	var testCases = []struct {
-		tac      string
+	testCases := []struct {
+		tac      int32
 		expected bool
 	}{
-		{"123", true},
-		{"7000", true},
-		{"1", true},
-		{"16777215", true},
-		{"0", false},
-		{"16777216", false},
-		{"invalid", false},
-		{"123ad", false},
-		{"", false},
+		{123, true},
+		{7000, true},
+		{1, true},
+		{16777215, true},
+		{0, false},
+		{16777216, false},
 	}
 
 	for _, tc := range testCases {
 		r := isValidGnbTac(tc.tac)
 		if r != tc.expected {
-			t.Errorf("%s", tc.tac)
+			t.Errorf("%d", tc.tac)
 		}
 	}
+}
+
+func genLongString(length int) string {
+	return strings.Repeat("a", length)
 }

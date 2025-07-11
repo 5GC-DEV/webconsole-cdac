@@ -8,8 +8,10 @@ import (
 	"strconv"
 )
 
-const NAME_PATTERN = "^[a-zA-Z0-9-_]+$"
-const FQDN_PATTERN = "^([a-zA-Z0-9-]+\\.){2,}([a-zA-Z]{2,6})$"
+const (
+	NAME_PATTERN = "^[a-zA-Z][a-zA-Z0-9-_]{1,255}$"
+	FQDN_PATTERN = "^([a-zA-Z0-9][a-zA-Z0-9-]+\\.){2,}([a-zA-Z]{2,6})$"
+)
 
 func isValidName(name string) bool {
 	nameMatch, err := regexp.MatchString(NAME_PATTERN, name)
@@ -35,10 +37,6 @@ func isValidUpfPort(port string) bool {
 	return portNum >= 0 && portNum <= 65535
 }
 
-func isValidGnbTac(tac string) bool {
-	tacNum, err := strconv.Atoi(tac)
-	if err != nil {
-		return false
-	}
-	return tacNum >= 1 && tacNum <= 16777215
+func isValidGnbTac(tac int32) bool {
+	return tac >= 1 && tac <= 16777215
 }
