@@ -256,7 +256,7 @@ const DEVICE_GROUP_CONFIG = `{
 	"imsis": [
 	  "string"
 	],
-	"ip-domain-expanded": [
+	"ip-domains": [
 	  {
 		"dnn": "string",
 		"dns-primary": "string",

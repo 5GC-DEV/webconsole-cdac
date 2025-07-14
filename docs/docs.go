@@ -1248,7 +1248,7 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "ip-domain-expanded": {
+                "ip-domains": {
                     "$ref": "#/definitions/configmodels.DeviceGroupsIpDomainExpanded"
                 },
                 "ip-domain-name": {
