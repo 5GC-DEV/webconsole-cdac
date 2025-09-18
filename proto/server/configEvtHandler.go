@@ -757,19 +757,15 @@ func sendPebbleNotification(key string) error {
 }
 
 func processDeviceGroup(devGroupConfig *configmodels.DeviceGroups, snssai *models.Snssai, mcc, mnc string) {
-	dnnMap := make(map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos) // Stores multiple DNNs & their QoS per IMSI
+	dnnMap := make(map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos)
+	for _, ipDomain := range devGroupConfig.IpDomainExpanded {
+		dnn := ipDomain.Dnn
+		if ipDomain.UeDnnQos != nil {
+			dnnMap[dnn] = append(dnnMap[dnn], *ipDomain.UeDnnQos)
+		}
+	}
 
 	for i, imsi := range devGroupConfig.Imsis {
-		logger.ConfigLog.Infoln("Processing IMSI:", imsi)
-
-		dnnMap = make(map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos)
-		for _, ipDomain := range devGroupConfig.IpDomainExpanded {
-			dnn := ipDomain.Dnn
-			// Ensure UeDnnQos is not nil before appending
-			if ipDomain.UeDnnQos != nil {
-				dnnMap[dnn] = append(dnnMap[dnn], *ipDomain.UeDnnQos) // Directly append the UeDnnQos
-			}
-		}
 		var gpsi string
 		if devGroupConfig.Msisdns != nil && i < len(devGroupConfig.Msisdns) {
 			gpsi = devGroupConfig.Msisdns[i]
