@@ -771,8 +771,7 @@ func processDeviceGroup(devGroupConfig *configmodels.DeviceGroups, snssai *model
 			dnnMap[dnn] = append(dnnMap[dnn], *ipDomain.UeDnnQos)
 		}
 	}
-
-	//Calculate aggragate QoS once for the entire group
+	// Calculate aggragate QoS once for the entire group
 	var allQosProfiles []configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
 	for _, qosList := range dnnMap {
 		allQosProfiles = append(allQosProfiles, qosList...)
