@@ -368,13 +368,7 @@ func updateSmPolicyData(snssai *models.Snssai, dnnMap map[string][]configmodels.
 	}
 }
 
-func updateAmProvisionedData(gpsi string, snssai *models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
-	var allQosProfiles []configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
-	for _, qosList := range dnnMap {
-		allQosProfiles = append(allQosProfiles, qosList...)
-	}
-	aggregatedQoS := aggregateQoS(allQosProfiles)
-
+func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
 	var gpsiSlice []string
 	if gpsi != "" { // Only add if gpsi is not empty
 		gpsiSlice = []string{gpsi}
@@ -646,6 +640,19 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 				}
 				/* skip delete case */
 				if confData.Msg.MsgMethod != configmodels.Delete_op {
+					dnnMap := make(map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos)
+					for _, ipDomain := range confData.Msg.DevGroup.IpDomainExpanded {
+						if ipDomain.UeDnnQos != nil {
+							dnnMap[ipDomain.Dnn] = append(dnnMap[ipDomain.Dnn], *ipDomain.UeDnnQos)
+						}
+					}
+
+					// 2. Calculate the aggregatedQoS once for the entire group.
+					var allQosProfiles []configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
+					for _, qosList := range dnnMap {
+						allQosProfiles = append(allQosProfiles, qosList...)
+					}
+					aggregatedQoS := aggregateQoS(allQosProfiles)
 					for i, imsi := range confData.Msg.DevGroup.Imsis {
 						/* update only if the imsi is provisioned */
 						if subscriberAuthData.SubscriberAuthenticationDataGet("imsi-"+imsi) != nil {
@@ -660,7 +667,7 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 								}
 							}
 							// Call update functions only once per IMSI
-							updateSubscriberData(imsi, gpsi, snssai, dnnMap, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc)
+							updateSubscriberData(imsi, gpsi, snssai, dnnMap, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, aggregatedQoS)
 						}
 					}
 				}
@@ -762,6 +769,12 @@ func processDeviceGroup(devGroupConfig *configmodels.DeviceGroups, snssai *model
 		}
 	}
 
+	var allQosProfiles []configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
+	for _, qosList := range dnnMap {
+		allQosProfiles = append(allQosProfiles, qosList...)
+	}
+	aggregatedQoS := aggregateQoS(allQosProfiles)
+
 	for i, imsi := range devGroupConfig.Imsis {
 		var gpsi string
 		if devGroupConfig.Msisdns != nil && i < len(devGroupConfig.Msisdns) {
@@ -769,18 +782,18 @@ func processDeviceGroup(devGroupConfig *configmodels.DeviceGroups, snssai *model
 		}
 		// Call update functions once after processing all DNNs
 		logger.ConfigLog.Infoln("Processing IMSI:", imsi, "with GPSI:", gpsi)
-		updateSubscriberData(imsi, gpsi, snssai, dnnMap, mcc, mnc)
+		updateSubscriberData(imsi, gpsi, snssai, dnnMap, mcc, mnc, aggregatedQoS)
 	}
 }
 
-func updateSubscriberData(imsi string, gpsi string, snssai *models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc string) {
+func updateSubscriberData(imsi string, gpsi string, snssai *models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc string, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos) {
 	updateAmPolicyData(imsi)
-
-	// Pass dnnMap directly to functions that support multiple DNNs
 	updateSmPolicyData(snssai, dnnMap, imsi)
 	updateSmfSelectionProvisionedData(snssai, mcc, mnc, dnnMap, imsi)
-	updateAmProvisionedData(gpsi, snssai, dnnMap, mcc, mnc, imsi)
-	updateSmProvisionedData(snssai, dnnMap, mcc, mnc, imsi) // Updated function to handle multiple DNNs
+	// Pass the pre-calculated aggregatedQoS result to the function that needs it.
+	updateAmProvisionedData(gpsi, snssai, aggregatedQoS, mcc, mnc, imsi)
+
+	updateSmProvisionedData(snssai, dnnMap, mcc, mnc, imsi)
 
 	logger.ConfigLog.Infoln("Updated IMSI:", imsi, "for all DNNs")
 }
