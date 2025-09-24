@@ -369,11 +369,11 @@ func updateSmPolicyData(snssai *models.Snssai, dnnMap map[string][]configmodels.
 }
 
 func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
-	var gpsiSlice []string
-	if gpsi != "" { // Only add if gpsi is not empty
+	var gpsiSlice []string // Initialize a slice to hold the GPSI.
+	if gpsi != "" {        // Only add if gpsi is not empty
 		gpsiSlice = []string{gpsi}
 	}
-
+	// Construct the AccessAndMobilitySubscriptionData structure with the subscriber's details.
 	amData := models.AccessAndMobilitySubscriptionData{
 		Gpsis: gpsiSlice,
 		Nssai: &models.Nssai{
@@ -382,11 +382,12 @@ func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS c
 		},
 		// Directly use the pre-calculated value of aggregatedQoS
 		SubscribedUeAmbr: &models.AmbrRm{
+			// Convert the downlink and uplink bit rates from uint64 to string format required by the model.
 			Downlink: convertToString(uint64(aggregatedQoS.DnnMbrDownlink)),
 			Uplink:   convertToString(uint64(aggregatedQoS.DnnMbrUplink)),
 		},
 	}
-
+	// Convert the Go struct `amData` into a BSON map, which is the format required by the MongoDB driver.
 	amDataBsonA := configmodels.ToBsonM(amData)
 	amDataBsonA["ueId"] = "imsi-" + imsi
 	amDataBsonA["servingPlmnId"] = mcc + mnc
@@ -394,7 +395,7 @@ func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS c
 		"ueId":          "imsi-" + imsi,
 		"servingPlmnId": mcc + mnc,
 	}
-
+	// Create a filter to uniquely identify the document in the database for update or insertion.
 	logger.DbLog.Infof("*** Data to be sent to database - AmProvisionedData: %+v", amDataBsonA)
 	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(amDataColl, filter, amDataBsonA)
 	if errPost != nil {
@@ -764,21 +765,21 @@ func sendPebbleNotification(key string) error {
 
 func processDeviceGroup(devGroupConfig *configmodels.DeviceGroups, snssai *models.Snssai, mcc, mnc string) {
 	dnnMap := make(map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos) // Stores multiple DNNs & their QoS per IMSI
+	// Iterate over each expanded IP domain configuration within the device group.
 	for _, ipDomain := range devGroupConfig.IpDomainExpanded {
-		dnn := ipDomain.Dnn
-		// Ensure UeDnnQos is not nil before appending
-		if ipDomain.UeDnnQos != nil {
+		dnn := ipDomain.Dnn           // Extract the DNN from the current IP domain.
+		if ipDomain.UeDnnQos != nil { // Ensure UeDnnQos is not nil before appending
 			dnnMap[dnn] = append(dnnMap[dnn], *ipDomain.UeDnnQos)
 		}
 	}
-	// Calculate aggragate QoS once for the entire group
-	var allQosProfiles []configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
+	var allQosProfiles []configmodels.DeviceGroupsIpDomainExpandedUeDnnQos // Create a slice to hold all QoS profiles from all DNNs in the device group.
+	// Iterate through the dnnMap to collect all QoS profiles into a single slice.
 	for _, qosList := range dnnMap {
 		allQosProfiles = append(allQosProfiles, qosList...)
 	}
-
+	// Calculate aggragate QoS once for the entire group
 	aggregatedQoS := aggregateQoS(allQosProfiles)
-
+	// Iterate over each IMSI in the device group configuration.
 	for i, imsi := range devGroupConfig.Imsis {
 		var gpsi string
 		if devGroupConfig.Msisdns != nil && i < len(devGroupConfig.Msisdns) {
@@ -796,6 +797,6 @@ func updateSubscriberData(imsi string, gpsi string, snssai *models.Snssai, dnnMa
 	updateSmfSelectionProvisionedData(snssai, mcc, mnc, dnnMap, imsi)
 	updateAmProvisionedData(gpsi, snssai, aggregatedQoS, mcc, mnc, imsi) // Pass the pre-calculated aggregatedQoS result and gpsi to the function that needs it.
 	updateSmProvisionedData(snssai, dnnMap, mcc, mnc, imsi)
-
+	// Log a confirmation message indicating that all updates for the specified IMSI across all its associated DNNs have been completed.
 	logger.ConfigLog.Infoln("Updated IMSI:", imsi, "for all DNNs")
 }
