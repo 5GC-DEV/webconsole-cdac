@@ -30,6 +30,7 @@ type NfOamInstance struct {
 }
 
 func init() {
+	// This init hook is intentionally left empty. Reserved for future initialization logic.
 }
 
 func (context *WEBUIContext) UpdateNfProfiles() {
