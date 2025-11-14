@@ -30,7 +30,7 @@ func (m *MockSession) CommitTransaction(ctx context.Context) error {
 }
 
 func (m *MockSession) EndSession(ctx context.Context) {
-	// Mock does not perform actual session cleanup
+	// Intentionally left empty
 }
 
 type MockMongoClientDBError struct {
