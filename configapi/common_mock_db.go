@@ -29,7 +29,9 @@ func (m *MockSession) CommitTransaction(ctx context.Context) error {
 	return nil
 }
 
-func (m *MockSession) EndSession(ctx context.Context) {}
+func (m *MockSession) EndSession(ctx context.Context) {
+	// Intentionally left empty
+}
 
 type MockMongoClientDBError struct {
 	dbadapter.DBInterface
