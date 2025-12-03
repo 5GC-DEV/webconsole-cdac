@@ -409,7 +409,9 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 		"ueId":          "imsi-" + imsi,
 		"servingPlmnId": mcc + mnc,
 	}
-
+	logger.DbLog.Info("---snssai: ", snssai)
+	logger.DbLog.Info("---snssai sst: ", snssai.Sst)
+	logger.DbLog.Info("---snssai sd: ", snssai.Sd)
 	// Fetch the existing record from the database
 	existingRecord, err := dbadapter.CommonDBClient.RestfulAPIGetOne(smDataColl, filter)
 	if err != nil && err.Error() != "mongo: no documents in result" {
