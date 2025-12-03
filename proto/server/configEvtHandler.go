@@ -342,9 +342,10 @@ func updateAmPolicyData(imsi string) {
 	}
 }
 
-func updateSmPolicyData(snssai *models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, imsi string) {
+func updateSmPolicyData(snssais []models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, imsi string) {
 	var smPolicyData models.SmPolicyData
-	var smPolicySnssaiData models.SmPolicySnssaiData
+	smPolicyData.SmPolicySnssaiData = make(map[string]models.SmPolicySnssaiData)
+
 	// Iterate over all DNNs in the map
 	dnnData := make(map[string]models.SmPolicyDnnData)
 
@@ -353,11 +354,19 @@ func updateSmPolicyData(snssai *models.Snssai, dnnMap map[string][]configmodels.
 			Dnn: dnn,
 		}
 	}
-	// smpolicydata
-	smPolicySnssaiData.Snssai = snssai
-	smPolicySnssaiData.SmPolicyDnnData = dnnData
-	smPolicyData.SmPolicySnssaiData = make(map[string]models.SmPolicySnssaiData)
-	smPolicyData.SmPolicySnssaiData[SnssaiModelsToHex(*snssai)] = smPolicySnssaiData
+
+	// Loop through all configured slices
+	for _, s := range snssais {
+		snssaiCopy := s
+		smPolicySnssaiData := models.SmPolicySnssaiData{
+			Snssai:          &snssaiCopy,
+			SmPolicyDnnData: dnnData,
+		}
+		// Convert SNSSAI to string key
+		key := SnssaiModelsToHex(snssaiCopy)
+		smPolicyData.SmPolicySnssaiData[key] = smPolicySnssaiData
+	}
+
 	smPolicyDatBsonA := configmodels.ToBsonM(smPolicyData)
 	smPolicyDatBsonA["ueId"] = "imsi-" + imsi
 	filter := bson.M{"ueId": "imsi-" + imsi}
@@ -368,7 +377,7 @@ func updateSmPolicyData(snssai *models.Snssai, dnnMap map[string][]configmodels.
 	}
 }
 
-func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
+func updateAmProvisionedData(gpsi string, snssais []models.Snssai, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
 	var gpsiSlice []string // Initialize a slice to hold the GPSI.
 	if gpsi != "" {        // Only add if gpsi is not empty
 		gpsiSlice = []string{gpsi}
@@ -377,8 +386,8 @@ func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS c
 	amData := models.AccessAndMobilitySubscriptionData{
 		Gpsis: gpsiSlice,
 		Nssai: &models.Nssai{
-			DefaultSingleNssais: []models.Snssai{*snssai},
-			SingleNssais:        []models.Snssai{*snssai},
+			DefaultSingleNssais: snssais,
+			SingleNssais:        snssais,
 		},
 		// Directly use the pre-calculated value of aggregatedQoS
 		SubscribedUeAmbr: &models.AmbrRm{
@@ -556,39 +565,63 @@ func updateSmfSelectionProvisionedData(snssai *models.Snssai, mcc, mnc string, d
 	}
 }
 
-func isDeviceGroupExistInSlice(msg *Update5GSubscriberMsg) *configmodels.Slice {
+// func isDeviceGroupExistInSlice(msg *Update5GSubscriberMsg) *configmodels.Slice {
+// 	for name, slice := range getSlices() {
+// 		for _, dgName := range slice.SiteDeviceGroup {
+// 			if dgName == msg.Msg.DevGroupName {
+// 				logger.WebUILog.Infof("device Group [%v] is part of slice: %v", dgName, name)
+// 				return slice
+// 			}
+// 		}
+// 	}
+
+// 	return nil
+// }
+
+func isDeviceGroupExistInSlice(msg *Update5GSubscriberMsg) []*configmodels.Slice {
+	var result []*configmodels.Slice
+
 	for name, slice := range getSlices() {
 		for _, dgName := range slice.SiteDeviceGroup {
 			if dgName == msg.Msg.DevGroupName {
 				logger.WebUILog.Infof("device Group [%v] is part of slice: %v", dgName, name)
-				return slice
+				result = append(result, slice)
+				break // Prevent duplicate checks inside same slice
 			}
 		}
 	}
 
-	return nil
+	return result
 }
 
-func getAddedGroupsList(slice, prevSlice *configmodels.Slice) (names []string) {
-	return getDeleteGroupsList(prevSlice, slice)
+func getAddedGroupsList(slice []configmodels.Slice, prevSlice *configmodels.Slice) (names []string) {
+	return getDeleteGroupsList(slice, prevSlice)
 }
 
-func getDeleteGroupsList(slice, prevSlice *configmodels.Slice) (names []string) {
+func getDeleteGroupsList(slices []configmodels.Slice, prevSlice *configmodels.Slice) (names []string) {
 	for prevSlice == nil {
 		return
 	}
 
-	if slice != nil {
-		for _, pdgName := range prevSlice.SiteDeviceGroup {
-			var found bool
-			for _, dgName := range slice.SiteDeviceGroup {
-				if dgName == pdgName {
-					found = true
+	if len(slices) > 0 {
+		for _, prevDG := range prevSlice.SiteDeviceGroup {
+			found := false
+
+			// Loop over each slice in new config
+			for _, s := range slices {
+				for _, dg := range s.SiteDeviceGroup {
+					if dg == prevDG {
+						found = true
+						break
+					}
+				}
+				if found {
 					break
 				}
 			}
+
 			if !found {
-				names = append(names, pdgName)
+				names = append(names, prevDG)
 			}
 		}
 	} else {
@@ -629,17 +662,26 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 		case configmodels.Device_group:
 			rwLock.RLock()
 			/* is this devicegroup part of any existing slice */
-			slice := isDeviceGroupExistInSlice(confData)
-			if slice != nil {
+			slices := isDeviceGroupExistInSlice(confData)
+			if len(slices) == 0 {
+				logger.DbLog.Warn("Device group not found in any slice.")
+				rwLock.RUnlock()
+				return
+			}
+			// if slice != nil {
+			for _, slice := range slices {
 				sVal, err := strconv.ParseUint(slice.SliceId.Sst, 10, 32)
 				if err != nil {
 					logger.DbLog.Errorf("could not parse SST %v", slice.SliceId.Sst)
 					return
 				}
-				snssai := &models.Snssai{
+
+				snssai := models.Snssai{
 					Sd:  slice.SliceId.Sd,
 					Sst: int32(sVal),
 				}
+				snssaiList := []models.Snssai{snssai}
+
 				/* skip delete case */
 				if confData.Msg.MsgMethod != configmodels.Delete_op {
 					dnnMap := make(map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos)
@@ -670,7 +712,7 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 								}
 							}
 							// Call update functions only once per IMSI
-							updateSubscriberData(imsi, gpsi, snssai, dnnMap, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, aggregatedQoS)
+							updateSubscriberData(imsi, gpsi, snssaiList, dnnMap, slice.SiteInfo.Plmn.Mcc, slice.SiteInfo.Plmn.Mnc, aggregatedQoS)
 						}
 					}
 				}
@@ -683,40 +725,47 @@ func Config5GUpdateHandle(confChan chan *Update5GSubscriberMsg) {
 		case configmodels.Network_slice:
 			rwLock.RLock()
 			logger.WebUILog.Debugln("insert/update Network Slice")
-			slice := confData.Msg.Slice
-			if slice == nil && confData.PrevSlice != nil {
+			slices := confData.Msg.Slice
+			if slices == nil && confData.PrevSlice != nil {
 				logger.WebUILog.Debugln("deleted Slice:", confData.PrevSlice)
 			}
-			if slice != nil {
-				sVal, err := strconv.ParseUint(slice.SliceId.Sst, 10, 32)
-				if err != nil {
-					logger.DbLog.Errorf("could not parse SST %v", slice.SliceId.Sst)
-				}
-				snssai := &models.Snssai{
-					Sd:  slice.SliceId.Sd,
-					Sst: int32(sVal),
-				}
-				mcc := slice.SiteInfo.Plmn.Mcc
-				mnc := slice.SiteInfo.Plmn.Mnc
-				for _, dgName := range slice.SiteDeviceGroup {
-					logger.ConfigLog.Infoln("Processing Device Group:", dgName)
-
-					devGroupConfig := getDeviceGroupByName(dgName)
-					if devGroupConfig == nil {
-						logger.ConfigLog.Warnln("Device group configuration is nil for dgName:", dgName)
-						continue
+			var snssaiList []models.Snssai
+			if slices != nil {
+				for _, slice := range slices {
+					sVal, err := strconv.ParseUint(slice.SliceId.Sst, 10, 32)
+					if err != nil {
+						logger.DbLog.Errorf("could not parse SST %v", slice.SliceId.Sst)
 					}
+					snssaiList = append(snssaiList, models.Snssai{
+						Sd:  slice.SliceId.Sd,
+						Sst: int32(sVal),
+					})
+					// snssais := &models.Snssai{
+					// 	Sd:  slices.SliceId.Sd,
+					// 	Sst: int32(sVal),
+					// }
+					mcc := slice.SiteInfo.Plmn.Mcc
+					mnc := slice.SiteInfo.Plmn.Mnc
+					for _, dgName := range slice.SiteDeviceGroup {
+						logger.ConfigLog.Infoln("Processing Device Group:", dgName)
 
-					if len(devGroupConfig.IpDomainExpanded) == 0 {
-						logger.ConfigLog.Warnln("IPDomainExpanded is nil or empty for dgName:", dgName)
-						continue
+						devGroupConfig := getDeviceGroupByName(dgName)
+						if devGroupConfig == nil {
+							logger.ConfigLog.Warnln("Device group configuration is nil for dgName:", dgName)
+							continue
+						}
+
+						if len(devGroupConfig.IpDomainExpanded) == 0 {
+							logger.ConfigLog.Warnln("IPDomainExpanded is nil or empty for dgName:", dgName)
+							continue
+						}
+
+						processDeviceGroup(devGroupConfig, snssaiList, mcc, mnc)
 					}
-
-					processDeviceGroup(devGroupConfig, snssai, mcc, mnc)
 				}
 			}
 
-			dgnames := getDeleteGroupsList(slice, confData.PrevSlice)
+			dgnames := getDeleteGroupsList(slices, confData.PrevSlice)
 			for _, dgname := range dgnames {
 				devGroupConfig := getDeviceGroupByName(dgname)
 				if devGroupConfig != nil {
@@ -763,7 +812,7 @@ func sendPebbleNotification(key string) error {
 	return nil
 }
 
-func processDeviceGroup(devGroupConfig *configmodels.DeviceGroups, snssai *models.Snssai, mcc, mnc string) {
+func processDeviceGroup(devGroupConfig *configmodels.DeviceGroups, snssais []models.Snssai, mcc, mnc string) {
 	dnnMap := make(map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos) // Stores multiple DNNs & their QoS per IMSI
 	// Iterate over each expanded IP domain configuration within the device group.
 	for _, ipDomain := range devGroupConfig.IpDomainExpanded {
@@ -787,16 +836,16 @@ func processDeviceGroup(devGroupConfig *configmodels.DeviceGroups, snssai *model
 		}
 		// Call update functions once after processing all DNNs
 		logger.ConfigLog.Infoln("Processing IMSI:", imsi, "with GPSI:", gpsi)
-		updateSubscriberData(imsi, gpsi, snssai, dnnMap, mcc, mnc, aggregatedQoS)
+		updateSubscriberData(imsi, gpsi, snssais, dnnMap, mcc, mnc, aggregatedQoS)
 	}
 }
 
-func updateSubscriberData(imsi string, gpsi string, snssai *models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc string, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos) {
+func updateSubscriberData(imsi string, gpsi string, snssais []models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc string, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos) {
 	updateAmPolicyData(imsi)
-	updateSmPolicyData(snssai, dnnMap, imsi)
-	updateSmfSelectionProvisionedData(snssai, mcc, mnc, dnnMap, imsi)
-	updateAmProvisionedData(gpsi, snssai, aggregatedQoS, mcc, mnc, imsi) // Pass the pre-calculated aggregatedQoS result and gpsi to the function that needs it.
-	updateSmProvisionedData(snssai, dnnMap, mcc, mnc, imsi)
+	updateSmPolicyData(snssais, dnnMap, imsi)
+	updateSmfSelectionProvisionedData(snssais, mcc, mnc, dnnMap, imsi)
+	updateAmProvisionedData(gpsi, snssais, aggregatedQoS, mcc, mnc, imsi) // Pass the pre-calculated aggregatedQoS result and gpsi to the function that needs it.
+	updateSmProvisionedData(snssais, dnnMap, mcc, mnc, imsi)
 	// Log a confirmation message indicating that all updates for the specified IMSI across all its associated DNNs have been completed.
 	logger.ConfigLog.Infoln("Updated IMSI:", imsi, "for all DNNs")
 }

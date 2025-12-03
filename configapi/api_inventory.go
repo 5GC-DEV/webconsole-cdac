@@ -524,7 +524,7 @@ func updateInventoryInNetworkSlices(filter bson.M, updateFunc func(*configmodels
 		msg := &configmodels.ConfigMessage{
 			MsgMethod: configmodels.Post_op,
 			MsgType:   configmodels.Network_slice,
-			Slice:     &networkSlice,
+			Slice:     []configmodels.Slice{networkSlice},
 			SliceName: networkSlice.SliceName,
 		}
 		messages = append(messages, msg)

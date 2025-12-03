@@ -68,7 +68,7 @@ func updateDeviceGroupInNetworkSlices(groupName string) {
 		msg := &configmodels.ConfigMessage{
 			MsgMethod: configmodels.Post_op,
 			MsgType:   configmodels.Network_slice,
-			Slice:     &networkSlice,
+			Slice:     []configmodels.Slice{networkSlice},
 			SliceName: networkSlice.SliceName,
 		}
 		configChannel <- msg
@@ -280,7 +280,7 @@ func NetworkSlicePostHandler(c *gin.Context, msgOp int) error {
 	msg.MsgMethod = msgOp
 	procReq.SliceName = sliceName
 	msg.MsgType = configmodels.Network_slice
-	msg.Slice = &procReq
+	msg.Slice = []configmodels.Slice{procReq}
 	msg.SliceName = sliceName
 	configChannel <- &msg
 	logger.ConfigLog.Infof("successfully Added Slice [%v] to config channel", sliceName)

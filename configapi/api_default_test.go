@@ -359,11 +359,22 @@ func TestDeviceGroupDeleteHandler_DeviceGroupExistsInNetworkSlices(t *testing.T)
 					if msg.SliceName != expectedSliceName {
 						t.Errorf("Expected slice name %v, got %v", expectedSliceName, msg.SliceName)
 					}
-					for _, group := range msg.Slice.SiteDeviceGroup {
-						if group == expectedGroupName {
-							t.Errorf("Expected %v to be removed from SiteDeviceGroup in slice %s, but it was found", expectedGroupName, msg.SliceName)
+					// for _, group := range msg.Slice.SiteDeviceGroup {
+					// 	if group == expectedGroupName {
+					// 		t.Errorf("Expected %v to be removed from SiteDeviceGroup in slice %s, but it was found", expectedGroupName, msg.SliceName)
+					// 	}
+					// }
+					if len(msg.Slice) == 0 {
+						t.Errorf("empty slice")
+					}
+					for _, sliceObj := range msg.Slice {
+						for _, group := range sliceObj.SiteDeviceGroup {
+							if group == expectedGroupName {
+								t.Errorf("Expected %v to be removed from SiteDeviceGroup in slice %s, but it was found", expectedGroupName, msg.SliceName)
+							}
 						}
 					}
+
 				default:
 					t.Error("Expected updated network slice message in config channel but got none")
 				}
