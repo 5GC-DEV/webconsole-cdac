@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/omec-project/openapi/models"
+	"github.com/5GC-DEV/openapi-cdac/models"
 	"github.com/omec-project/webconsole/backend/factory"
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/configmodels"
@@ -373,28 +373,62 @@ func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS c
 	if gpsi != "" {        // Only add if gpsi is not empty
 		gpsiSlice = []string{gpsi}
 	}
-	// Construct the AccessAndMobilitySubscriptionData structure with the subscriber's details.
-	amData := models.AccessAndMobilitySubscriptionData{
-		Gpsis: gpsiSlice,
-		Nssai: &models.Nssai{
-			DefaultSingleNssais: []models.Snssai{*snssai},
-			SingleNssais:        []models.Snssai{*snssai},
-		},
-		// Directly use the pre-calculated value of aggregatedQoS
-		SubscribedUeAmbr: &models.AmbrRm{
-			// Convert the downlink and uplink bit rates from uint64 to string format required by the model.
-			Downlink: convertToString(uint64(aggregatedQoS.DnnMbrDownlink)),
-			Uplink:   convertToString(uint64(aggregatedQoS.DnnMbrUplink)),
-		},
+
+	filter := bson.M{
+		"ueId":          "imsi-" + imsi,
+		"servingPlmnId": mcc + mnc,
+	}
+
+	existingRecord, err := dbadapter.CommonDBClient.RestfulAPIGetOne(amDataColl, filter)
+	if err != nil && err.Error() != "mongo: no documents in result" {
+		logger.DbLog.Warnf("Failed to fetch existing record for ueId: %s, error: %v", imsi, err)
+		return
+	}
+
+	var snssaiList []models.Snssai
+	snssaiList = append(snssaiList, *snssai)
+
+	var amData models.AccessAndMobilitySubscriptionData
+
+	if existingRecord == nil {
+		// Construct the AccessAndMobilitySubscriptionData structure with the subscriber's details.
+		amData = models.AccessAndMobilitySubscriptionData{
+			Gpsis: gpsiSlice,
+			Nssai: &models.Nssai{
+				DefaultSingleNssais: snssaiList,
+				SingleNssais:        snssaiList,
+			},
+			// Directly use the pre-calculated value of aggregatedQoS
+			SubscribedUeAmbr: &models.AmbrRm{
+				// Convert the downlink and uplink bit rates from uint64 to string format required by the model.
+				Downlink: convertToString(uint64(aggregatedQoS.DnnMbrDownlink)),
+				Uplink:   convertToString(uint64(aggregatedQoS.DnnMbrUplink)),
+			},
+		}
+	} else {
+		bsonBytes, errMarshal := bson.Marshal(existingRecord) // Use a different name for error
+		if errMarshal != nil {
+			logger.DbLog.Errorf("Failed to marshal existing record: %v", errMarshal)
+			return
+		}
+		errUnmarshal := bson.Unmarshal(bsonBytes, &amData) // Use a different name for error
+		if errUnmarshal != nil {
+			logger.DbLog.Errorf("Failed to unmarshal existing record: %v", errUnmarshal)
+			return
+		}
+		nextSlice := *snssai
+		if !containsSnssai(amData.Nssai.SingleNssais, nextSlice) && !containsSnssai(amData.Nssai.DefaultSingleNssais, nextSlice) {
+			logger.DbLog.Infof("Appending new S-NSSAI %v to subscriber %s", nextSlice, imsi)
+			amData.Nssai.SingleNssais = append(amData.Nssai.SingleNssais, nextSlice)
+			amData.Nssai.DefaultSingleNssais = append(amData.Nssai.DefaultSingleNssais, nextSlice)
+		}
+
 	}
 	// Convert the Go struct `amData` into a BSON map, which is the format required by the MongoDB driver.
 	amDataBsonA := configmodels.ToBsonM(amData)
 	amDataBsonA["ueId"] = "imsi-" + imsi
 	amDataBsonA["servingPlmnId"] = mcc + mnc
-	filter := bson.M{
-		"ueId":          "imsi-" + imsi,
-		"servingPlmnId": mcc + mnc,
-	}
+
 	// Create a filter to uniquely identify the document in the database for update or insertion.
 	logger.DbLog.Infof("*** Data to be sent to database - AmProvisionedData: %+v", amDataBsonA)
 	_, errPost := dbadapter.CommonDBClient.RestfulAPIPost(amDataColl, filter, amDataBsonA)
@@ -417,11 +451,14 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 		return
 	}
 
+	var snssaiList []models.Snssai
+	snssaiList = append(snssaiList, *snssai)
+
 	var smData models.SessionManagementSubscriptionData
 	if existingRecord == nil {
 		// No existing record, create a new one
 		smData = models.SessionManagementSubscriptionData{
-			SingleNssai:       snssai,
+			SingleNssai:       snssaiList,
 			DnnConfigurations: make(map[string]models.DnnConfiguration),
 		}
 	} else {
@@ -439,6 +476,12 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 			logger.DbLog.Errorf("Failed to unmarshal existing record: %v", errUnmarshal)
 			return
 		}
+		nextSlice := *snssai
+		if !containsSnssai(smData.SingleNssai, nextSlice) {
+			logger.DbLog.Infof("Appending new S-NSSAI %v to subscriber %s", nextSlice, imsi)
+			smData.SingleNssai = append(smData.SingleNssai, nextSlice)
+		}
+
 	}
 	// Iterate over DNNs and add/update their configurations
 	for dnn, ueDnnQosList := range dnnMap {
@@ -472,6 +515,7 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 
 	// Convert to BSON format
 	// Convert smData to BSON format properly
+
 	bsonBytes, err := bson.Marshal(smData)
 	if err != nil {
 		logger.DbLog.Errorf("Failed to marshal smData: %v", err)
@@ -499,7 +543,14 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 		logger.DbLog.Warnln("Failed to update DNN configuration:", errPost)
 	}
 }
-
+func containsSnssai(list []models.Snssai, target models.Snssai) bool {
+	for _, v := range list {
+		if v.Sst == target.Sst && v.Sd == target.Sd {
+			return true
+		}
+	}
+	return false
+}
 func aggregateQoS(qosList []configmodels.DeviceGroupsIpDomainExpandedUeDnnQos) configmodels.DeviceGroupsIpDomainExpandedUeDnnQos {
 	var aggregated configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
 	for _, qos := range qosList {
@@ -524,27 +575,50 @@ func updateSmfSelectionProvisionedData(snssai *models.Snssai, mcc, mnc string, d
 		DnnInfos: []models.DnnInfo{},
 	}
 
-	// Iterate through the dnnMap to populate DnnInfos
-	for dnn := range dnnMap {
-		// Append each DNN's info to DnnInfos
-		snssaiInfo.DnnInfos = append(snssaiInfo.DnnInfos, models.DnnInfo{
-			Dnn: dnn,
-		})
-	}
-
-	// Add the SnssaiInfo to the map using the hex representation of the snssai
-	smfSelData.SubscribedSnssaiInfos[SnssaiModelsToHex(*snssai)] = snssaiInfo
-
-	// Convert to BSON format
-	smfSelecDataBsonA := configmodels.ToBsonM(smfSelData)
-	smfSelecDataBsonA["ueId"] = "imsi-" + imsi
-	smfSelecDataBsonA["servingPlmnId"] = mcc + mnc
-
 	// Define the filter for the database operation
 	filter := bson.M{
 		"ueId":          "imsi-" + imsi,
 		"servingPlmnId": mcc + mnc,
 	}
+
+	existingRecord, err := dbadapter.CommonDBClient.RestfulAPIGetOne(smfSelDataColl, filter)
+	if err != nil && err.Error() != "mongo: no documents in result" {
+		logger.DbLog.Warnf("Failed to fetch existing record for ueId: %s, error: %v", imsi, err)
+		return
+	}
+
+	if existingRecord == nil {
+		// Iterate through the dnnMap to populate DnnInfos
+		for dnn := range dnnMap {
+			// Append each DNN's info to DnnInfos
+			snssaiInfo.DnnInfos = append(snssaiInfo.DnnInfos, models.DnnInfo{
+				Dnn: dnn,
+			})
+		}
+		// Add the SnssaiInfo to the map using the hex representation of the snssai
+		smfSelData.SubscribedSnssaiInfos[SnssaiModelsToHex(*snssai)] = snssaiInfo
+	} else {
+		if _, exists := smfSelData.SubscribedSnssaiInfos[SnssaiModelsToHex(*snssai)]; exists {
+			logger.DbLog.Infof("SNSSAI already exists for UE %s, skipping append.", imsi)
+		} else {
+			logger.DbLog.Infof("Adding new SNSSAI  entry for UE %s", imsi)
+			// Fill DNN list for this SNSSAI
+			for dnn := range dnnMap {
+				snssaiInfo.DnnInfos = append(snssaiInfo.DnnInfos, models.DnnInfo{
+					Dnn: dnn,
+				})
+			}
+
+			// Insert new entry
+			smfSelData.SubscribedSnssaiInfos[SnssaiModelsToHex(*snssai)] = snssaiInfo
+		}
+
+	}
+
+	// Convert to BSON format
+	smfSelecDataBsonA := configmodels.ToBsonM(smfSelData)
+	smfSelecDataBsonA["ueId"] = "imsi-" + imsi
+	smfSelecDataBsonA["servingPlmnId"] = mcc + mnc
 
 	// Log the data to be sent to the database
 	logger.DbLog.Infof("Data to be sent to database - smf selection: %+v", smfSelecDataBsonA)
