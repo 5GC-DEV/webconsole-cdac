@@ -416,9 +416,11 @@ func TestGetSubscriberByID(t *testing.T) {
 								},
 							},
 						},
-						"singleNssai": map[string]interface{}{
-							"sd":  "010203",
-							"sst": 1,
+						"singleNssai": []interface{}{
+							map[string]interface{}{
+								"sd":  "010203",
+								"sst": 1,
+							},
 						},
 					},
 				},
