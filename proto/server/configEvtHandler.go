@@ -612,7 +612,6 @@ func updateSmfSelectionProvisionedData(snssai *models.Snssai, mcc, mnc string, d
 			// Insert new entry
 			smfSelData.SubscribedSnssaiInfos[SnssaiModelsToHex(*snssai)] = snssaiInfo
 		}
-
 	}
 	// Convert to BSON format
 	smfSelecDataBsonA := configmodels.ToBsonM(smfSelData)
