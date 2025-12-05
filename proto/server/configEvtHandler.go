@@ -598,6 +598,19 @@ func updateSmfSelectionProvisionedData(snssai *models.Snssai, mcc, mnc string, d
 		// Add the SnssaiInfo to the map using the hex representation of the snssai
 		smfSelData.SubscribedSnssaiInfos[SnssaiModelsToHex(*snssai)] = snssaiInfo
 	} else {
+		// Convert existing record to BSON properly
+		bsonBytes, errMarshal := bson.Marshal(existingRecord) // Use a different name for error
+		if errMarshal != nil {
+			logger.DbLog.Errorf("Failed to marshal existing record: %v", errMarshal)
+			return
+		}
+		// Unmarshal BSON into struct
+		errUnmarshal := bson.Unmarshal(bsonBytes, &smfSelData) // Use a different name for error
+		if errUnmarshal != nil {
+			logger.DbLog.Errorf("Failed to unmarshal existing record: %v", errUnmarshal)
+			return
+		}
+
 		if _, exists := smfSelData.SubscribedSnssaiInfos[SnssaiModelsToHex(*snssai)]; exists {
 			logger.DbLog.Infof("SNSSAI already exists for UE %s, skipping append.", imsi)
 		} else {
