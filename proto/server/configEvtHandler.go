@@ -422,7 +422,6 @@ func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS c
 			amData.Nssai.SingleNssais = append(amData.Nssai.SingleNssais, nextSlice)
 			amData.Nssai.DefaultSingleNssais = append(amData.Nssai.DefaultSingleNssais, nextSlice)
 		}
-
 	}
 	// Convert the Go struct `amData` into a BSON map, which is the format required by the MongoDB driver.
 	amDataBsonA := configmodels.ToBsonM(amData)
@@ -481,7 +480,6 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 			logger.DbLog.Infof("Appending new S-NSSAI %v to subscriber %s", nextSlice, imsi)
 			smData.SingleNssai = append(smData.SingleNssai, nextSlice)
 		}
-
 	}
 	// Iterate over DNNs and add/update their configurations
 	for dnn, ueDnnQosList := range dnnMap {
@@ -543,6 +541,7 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 		logger.DbLog.Warnln("Failed to update DNN configuration:", errPost)
 	}
 }
+
 func containsSnssai(list []models.Snssai, target models.Snssai) bool {
 	for _, v := range list {
 		if v.Sst == target.Sst && v.Sd == target.Sd {
@@ -551,6 +550,7 @@ func containsSnssai(list []models.Snssai, target models.Snssai) bool {
 	}
 	return false
 }
+
 func aggregateQoS(qosList []configmodels.DeviceGroupsIpDomainExpandedUeDnnQos) configmodels.DeviceGroupsIpDomainExpandedUeDnnQos {
 	var aggregated configmodels.DeviceGroupsIpDomainExpandedUeDnnQos
 	for _, qos := range qosList {
@@ -614,7 +614,6 @@ func updateSmfSelectionProvisionedData(snssai *models.Snssai, mcc, mnc string, d
 		}
 
 	}
-
 	// Convert to BSON format
 	smfSelecDataBsonA := configmodels.ToBsonM(smfSelData)
 	smfSelecDataBsonA["ueId"] = "imsi-" + imsi

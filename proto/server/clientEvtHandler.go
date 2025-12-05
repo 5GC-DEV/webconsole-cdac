@@ -611,7 +611,6 @@ func clientEventMachine(client *clientNF) {
 			}
 			client.clientLog.Infof("Send complete snapshoot to client. Number of Network Slices %v ", len(client.slicesConfigClient))
 			client.clientLog.Debugf("is client requested for metadata: %v ", client.metadataReqtd)
-
 			// currently pcf request for metadata
 			if client.metadataReqtd && !cReqMsg.newClient {
 				sliceProto := &protos.NetworkSlice{}
