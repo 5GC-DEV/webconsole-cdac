@@ -13,8 +13,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/5GC-DEV/openapi-cdac/models"
 	"github.com/gin-gonic/gin"
-	"github.com/omec-project/openapi/models"
 	"github.com/omec-project/webconsole/configmodels"
 	"github.com/omec-project/webconsole/dbadapter"
 	"go.mongodb.org/mongo-driver/bson"
@@ -265,9 +265,11 @@ func (m *MockCommonDBClientWithData) RestfulAPIGetMany(coll string, filter bson.
 	}
 	smDataData := []models.SessionManagementSubscriptionData{
 		{
-			SingleNssai: &models.Snssai{
-				Sst: 1,
-				Sd:  "010203",
+			SingleNssai: []models.Snssai{
+				{
+					Sst: 1,
+					Sd:  "010203",
+				},
 			},
 			DnnConfigurations: map[string]models.DnnConfiguration{
 				"internet": {
@@ -414,9 +416,11 @@ func TestGetSubscriberByID(t *testing.T) {
 								},
 							},
 						},
-						"singleNssai": map[string]interface{}{
-							"sd":  "010203",
-							"sst": 1,
+						"singleNssai": []interface{}{
+							map[string]interface{}{
+								"sd":  "010203",
+								"sst": 1,
+							},
 						},
 					},
 				},

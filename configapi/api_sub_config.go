@@ -14,8 +14,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/5GC-DEV/openapi-cdac/models"
 	"github.com/gin-gonic/gin"
-	"github.com/omec-project/openapi/models"
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/backend/webui_context"
 	"github.com/omec-project/webconsole/configmodels"
@@ -132,9 +132,11 @@ func GetSampleJSON(c *gin.Context) {
 
 	smDataData := []models.SessionManagementSubscriptionData{
 		{
-			SingleNssai: &models.Snssai{
-				Sst: 1,
-				Sd:  "010203",
+			SingleNssai: []models.Snssai{
+				{
+					Sst: 1,
+					Sd:  "010203",
+				},
 			},
 			DnnConfigurations: map[string]models.DnnConfiguration{
 				"internet": {
@@ -161,9 +163,11 @@ func GetSampleJSON(c *gin.Context) {
 			},
 		},
 		{
-			SingleNssai: &models.Snssai{
-				Sst: 1,
-				Sd:  "112233",
+			SingleNssai: []models.Snssai{
+				{
+					Sst: 1,
+					Sd:  "112233",
+				},
 			},
 			DnnConfigurations: map[string]models.DnnConfiguration{
 				"internet": {

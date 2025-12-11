@@ -10,8 +10,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/5GC-DEV/openapi-cdac/models"
 	"github.com/mitchellh/mapstructure"
-	"github.com/omec-project/openapi/models"
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/dbadapter"
 )
