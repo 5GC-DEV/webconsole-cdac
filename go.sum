@@ -1,8 +1,8 @@
 github.com/5GC-DEV/config5g-cdac v1.4.2-0.20250430103952-0383bf5b24b8 h1:mhgUeuj4sb3RCGFyDx9DoAl3e3Xppe4ihkQQCJLsVhw=
 github.com/5GC-DEV/config5g-cdac v1.4.2-0.20250430103952-0383bf5b24b8/go.mod h1:lgBpYjPX/MKbjfjy9pvo2ErNCA+2EYDoKEIszJO93E0=
 github.com/5GC-DEV/openapi-cdac v1.0.0/go.mod h1:TFxV/NlwA7waEk3BqH6baTQ8oWpPMRDFC1YCEpPjl04=
-github.com/5GC-DEV/openapi-cdac v1.0.1-0.20251204044727-11944132b21c h1:QVzSuGAY9XVfH3ZvZ143hjsZ/F78+AxRbc4T8odep9Y=
-github.com/5GC-DEV/openapi-cdac v1.0.1-0.20251204044727-11944132b21c/go.mod h1:AzJjwImNT/2BQHZM/XLGdrcoCrKqa3A99i9conguzHc=
+github.com/5GC-DEV/openapi-cdac v1.0.1-0.20251218084650-ef6e5b6d591f h1:NKBrV5uM0VZeOjHNk93jes+BhI/mPwkXXlc4P7iRaVw=
+github.com/5GC-DEV/openapi-cdac v1.0.1-0.20251218084650-ef6e5b6d591f/go.mod h1:AzJjwImNT/2BQHZM/XLGdrcoCrKqa3A99i9conguzHc=
 github.com/BurntSushi/toml v1.4.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
