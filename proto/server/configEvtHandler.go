@@ -368,7 +368,7 @@ func updateSmPolicyData(snssai *models.Snssai, dnnMap map[string][]configmodels.
 	}
 }
 
-func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
+/*func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
 	var gpsiSlice []string // Initialize a slice to hold the GPSI.
 	if gpsi != "" {        // Only add if gpsi is not empty
 		gpsiSlice = []string{gpsi}
@@ -434,6 +434,154 @@ func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS c
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
 	}
+}*/
+
+func updateAmProvisionedData(
+	gpsi string,
+	snssai *models.Snssai,
+	aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos,
+	mcc, mnc, imsi string,
+) {
+	servingPlmn := mcc + mnc
+	if servingPlmn == "" {
+		logger.DbLog.Errorf("servingPlmnId cannot be empty for IMSI %s", imsi)
+		return
+	}
+
+	ueId := "imsi-" + imsi
+
+	// Backward-compatible filter:
+	// Matches existing records with empty/missing servingPlmnId
+	filter := bson.M{
+		"ueId": ueId,
+		"$or": []bson.M{
+			{"servingPlmnId": servingPlmn},
+			{"servingPlmnId": ""},
+			{"servingPlmnId": bson.M{"$exists": false}},
+		},
+	}
+
+	existingRecord, err := dbadapter.CommonDBClient.RestfulAPIGetOne(amDataColl, filter)
+	if err != nil && err.Error() != "mongo: no documents in result" {
+		logger.DbLog.Warnf("Failed to fetch AM data for ueId %s: %v", ueId, err)
+		return
+	}
+
+	var amData models.AccessAndMobilitySubscriptionData
+
+	// -------------------------
+	// Create or Load AM Data
+	// -------------------------
+	if existingRecord == nil {
+		amData = models.AccessAndMobilitySubscriptionData{}
+	} else {
+		bsonBytes, err := bson.Marshal(existingRecord)
+		if err != nil {
+			logger.DbLog.Errorf("Failed to marshal existing AM data: %v", err)
+			return
+		}
+		if err := bson.Unmarshal(bsonBytes, &amData); err != nil {
+			logger.DbLog.Errorf("Failed to unmarshal existing AM data: %v", err)
+			return
+		}
+	}
+
+	// -------------------------
+	// Normalize & Initialize
+	// -------------------------
+	if amData.Nssai == nil {
+		amData.Nssai = &models.Nssai{}
+	}
+
+	amData.Nssai.SingleNssais =
+		uniqueSnssaiList(amData.Nssai.SingleNssais)
+	amData.Nssai.DefaultSingleNssais =
+		uniqueSnssaiList(amData.Nssai.DefaultSingleNssais)
+
+	// -------------------------
+	// Merge GPSI (no overwrite)
+	// -------------------------
+	if gpsi != "" && !containsString(amData.Gpsis, gpsi) {
+		amData.Gpsis = append(amData.Gpsis, gpsi)
+	}
+
+	// -------------------------
+	// Add S-NSSAI safely
+	// -------------------------
+	if snssai != nil {
+		nextSlice := normalizeSnssai(*snssai)
+
+		if !containsSnssai(amData.Nssai.SingleNssais, nextSlice) {
+			logger.DbLog.Infof("Adding S-NSSAI %+v to subscriber %s", nextSlice, imsi)
+			amData.Nssai.SingleNssais =
+				append(amData.Nssai.SingleNssais, nextSlice)
+		}
+
+		if !containsSnssai(amData.Nssai.DefaultSingleNssais, nextSlice) {
+			amData.Nssai.DefaultSingleNssais =
+				append(amData.Nssai.DefaultSingleNssais, nextSlice)
+		}
+	}
+
+	// -------------------------
+	// Set UE AMBR
+	// -------------------------
+	amData.SubscribedUeAmbr = &models.AmbrRm{
+		Downlink: convertToString(uint64(aggregatedQoS.DnnMbrDownlink)),
+		Uplink:   convertToString(uint64(aggregatedQoS.DnnMbrUplink)),
+	}
+
+	// -------------------------
+	// Prepare BSON for Upsert
+	// -------------------------
+	amDataBson := configmodels.ToBsonM(amData)
+	amDataBson["ueId"] = ueId
+	amDataBson["servingPlmnId"] = servingPlmn
+
+	logger.DbLog.Infof(
+		"Upserting AM Provisioned Data for ueId %s, servingPlmnId %s",
+		ueId, servingPlmn,
+	)
+
+	_, err = dbadapter.CommonDBClient.RestfulAPIPost(
+		amDataColl,
+		filter,
+		amDataBson,
+	)
+	if err != nil {
+		logger.DbLog.Warnf("Failed to upsert AM data for ueId %s: %v", ueId, err)
+	}
+}
+
+func normalizeSnssai(s models.Snssai) models.Snssai {
+	if s.Sd == "" {
+		s.Sd = "000000"
+	}
+	return s
+}
+
+func uniqueSnssaiList(list []models.Snssai) []models.Snssai {
+	seen := make(map[string]bool)
+	var result []models.Snssai
+
+	for _, s := range list {
+		s = normalizeSnssai(s)
+		key := fmt.Sprintf("%d-%s", s.Sst, s.Sd)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+func containsString(list []string, val string) bool {
+	for _, v := range list {
+		if v == val {
+			return true
+		}
+	}
+	return false
 }
 
 func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
