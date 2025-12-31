@@ -518,6 +518,7 @@ func PostSubscriberByID(c *gin.Context) {
 	/*if subsOverrideData.PlmnID != "" {
 		servingPlmnId = subsOverrideData.PlmnID
 	}*/
+	logger.WebUILog.Infoln("Successfully Added Subscriber plmn id: ", subsOverrideData.PlmnID)
 	if subsOverrideData.OPc != "" {
 		authSubsData.Opc.OpcValue = subsOverrideData.OPc
 	}
@@ -534,6 +535,7 @@ func PostSubscriberByID(c *gin.Context) {
 		MsgMethod:   configmodels.Post_op,
 		AuthSubData: &authSubsData,
 		Imsi:        ueId,
+		PlmnID:      subsOverrideData.PlmnID,
 	}
 	configChannel <- &msg
 	logger.WebUILog.Infoln("Successfully Added Subscriber Data to ConfigChannel: ", ueId)
