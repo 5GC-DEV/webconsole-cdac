@@ -438,9 +438,13 @@ func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS c
 		}
 	}
 	// Convert the Go struct `amData` into a BSON map, which is the format required by the MongoDB driver.
-	amDataBsonA := configmodels.ToBsonM(amData)
+	/*amDataBsonA := configmodels.ToBsonM(amData)
 	amDataBsonA["ueId"] = "imsi-" + imsi
-	amDataBsonA["servingPlmnId"] = mcc + mnc
+	amDataBsonA["servingPlmnId"] = mcc + mnc*/
+
+	amDataBsonA := configmodels.ToBsonM(amData)
+	amDataBsonA["ueId"] = ueId
+	amDataBsonA["servingPlmnId"] = servingPlmn
 
 	// Create a filter to uniquely identify the document in the database for update or insertion.
 	logger.DbLog.Infof("*** Data to be sent to database - AmProvisionedData: %+v", amDataBsonA)
