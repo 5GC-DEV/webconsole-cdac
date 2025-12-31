@@ -368,15 +368,29 @@ func updateSmPolicyData(snssai *models.Snssai, dnnMap map[string][]configmodels.
 	}
 }
 
-/*func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
+func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
 	var gpsiSlice []string // Initialize a slice to hold the GPSI.
 	if gpsi != "" {        // Only add if gpsi is not empty
 		gpsiSlice = []string{gpsi}
 	}
 
+	servingPlmn := mcc + mnc
+	if servingPlmn == "" {
+		logger.DbLog.Errorf("servingPlmnId cannot be empty for IMSI %s", imsi)
+		return
+	}
+
+	ueId := "imsi-" + imsi
+
+	// Backward-compatible filter:
+	// Matches existing records with empty/missing servingPlmnId
 	filter := bson.M{
-		"ueId":          "imsi-" + imsi,
-		"servingPlmnId": mcc + mnc,
+		"ueId": ueId,
+		"$or": []bson.M{
+			{"servingPlmnId": servingPlmn},
+			{"servingPlmnId": ""},
+			{"servingPlmnId": bson.M{"$exists": false}},
+		},
 	}
 
 	existingRecord, err := dbadapter.CommonDBClient.RestfulAPIGetOne(amDataColl, filter)
@@ -434,9 +448,9 @@ func updateSmPolicyData(snssai *models.Snssai, dnnMap map[string][]configmodels.
 	if errPost != nil {
 		logger.DbLog.Warnln(errPost)
 	}
-}*/
+}
 
-func updateAmProvisionedData(
+/*func updateAmProvisionedData(
 	gpsi string,
 	snssai *models.Snssai,
 	aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos,
@@ -582,7 +596,7 @@ func containsString(list []string, val string) bool {
 		}
 	}
 	return false
-}
+}*/
 
 func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) {
 	// Define the filter to find the existing record for this UE
