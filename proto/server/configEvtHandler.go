@@ -413,7 +413,7 @@ func updateAmProvisionedData(
 			logger.DbLog.Errorf("Failed to marshal existing AM data: %v", err)
 			return
 		}
-		if err := bson.Unmarshal(bsonBytes, &amData); err != nil {
+		if err = bson.Unmarshal(bsonBytes, &amData); err != nil {
 			logger.DbLog.Errorf("Failed to unmarshal existing AM data: %v", err)
 			return
 		}
@@ -444,13 +444,11 @@ func updateAmProvisionedData(
 
 		if !containsSnssai(amData.Nssai.SingleNssais, nextSlice) {
 			logger.DbLog.Infof("Adding S-NSSAI %+v to subscriber %s", nextSlice, imsi)
-			amData.Nssai.SingleNssais =
-				append(amData.Nssai.SingleNssais, nextSlice)
+			amData.Nssai.SingleNssais = append(amData.Nssai.SingleNssais, nextSlice)
 		}
 
 		if !containsSnssai(amData.Nssai.DefaultSingleNssais, nextSlice) {
-			amData.Nssai.DefaultSingleNssais =
-				append(amData.Nssai.DefaultSingleNssais, nextSlice)
+			amData.Nssai.DefaultSingleNssais = append(amData.Nssai.DefaultSingleNssais, nextSlice)
 		}
 	}
 
