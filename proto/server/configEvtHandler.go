@@ -407,7 +407,8 @@ func updateAmProvisionedData(
 	if existingRecord == nil {
 		amData = models.AccessAndMobilitySubscriptionData{}
 	} else {
-		bsonBytes, err := bson.Marshal(existingRecord)
+		var bsonBytes []byte
+		bsonBytes, err = bson.Marshal(existingRecord)
 		if err != nil {
 			logger.DbLog.Errorf("Failed to marshal existing AM data: %v", err)
 			return
@@ -425,10 +426,8 @@ func updateAmProvisionedData(
 		amData.Nssai = &models.Nssai{}
 	}
 
-	amData.Nssai.SingleNssais =
-		uniqueSnssaiList(amData.Nssai.SingleNssais)
-	amData.Nssai.DefaultSingleNssais =
-		uniqueSnssaiList(amData.Nssai.DefaultSingleNssais)
+	amData.Nssai.SingleNssais = uniqueSnssaiList(amData.Nssai.SingleNssais)
+	amData.Nssai.DefaultSingleNssais = uniqueSnssaiList(amData.Nssai.DefaultSingleNssais)
 
 	// -------------------------
 	// Merge GPSI (no overwrite)
