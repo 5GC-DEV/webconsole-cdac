@@ -24,7 +24,7 @@ require (
 
 require (
 	github.com/5GC-DEV/config5g-cdac v1.4.2-0.20250430103952-0383bf5b24b8 // indirect
-	github.com/5GC-DEV/openapi-cdac v1.0.1-0.20260109140746-44d5650a6474 // indirect
+	github.com/5GC-DEV/openapi-cdac v1.0.1-0.20260128100246-6b6810a8d96c // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
