@@ -84,14 +84,13 @@ func runWebUIAndNFConfig(webui webui_service.WebUIInterface, nfConf nfconfig.NFC
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go webui.Start(ctx)
-	logger.InitLog.Infoln("WebUI started")
-
 	err := nfConf.Start(ctx)
 	if err != nil {
 		cancel()
 		return fmt.Errorf("NFConfig failed: %w", err)
 	}
+	go webui.Start(ctx)
+	logger.InitLog.Infoln("WebUI started")
 
 	return nil
 }
