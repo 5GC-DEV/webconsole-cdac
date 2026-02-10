@@ -607,6 +607,7 @@ func TestSubscriberPostHandlersNoExistingSubscriber(t *testing.T) {
 		"opc":            "8e27b6af0e692e750f32667a3b14605d",
 		"key":            "8baf473f2f8fd09487cccbd7097c6862",
 		"sequenceNumber": "16f3b3f70fc2",
+		"msisdn":         "msisdn-9000000001",
 	}
 
 	jsonData, err := json.Marshal(inputData)
@@ -650,7 +651,8 @@ func TestSubscriberPostHandlersNoExistingSubscriber(t *testing.T) {
 			},
 			SequenceNumber: "16f3b3f70fc2",
 		},
-		Imsi: "imsi-208930100007487",
+		Imsi:   "imsi-208930100007487",
+		Msisdn: "msisdn-9000000001",
 	}
 
 	req, err := http.NewRequest(http.MethodPost, route, bytes.NewBuffer(jsonData))
@@ -693,6 +695,9 @@ func TestSubscriberPostHandlersNoExistingSubscriber(t *testing.T) {
 		}
 		if expectedMessage.Imsi != msg.Imsi {
 			t.Errorf("expected IMSI %+v, but got %+v", expectedMessage.Imsi, msg.Imsi)
+		}
+		if expectedMessage.Msisdn != msg.Msisdn {
+			t.Errorf("expected Msisdn %+v, but got %+v", expectedMessage.Msisdn, msg.Msisdn)
 		}
 	default:
 		t.Error("expected message in configChannel, but none received")

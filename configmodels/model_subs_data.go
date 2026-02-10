@@ -26,4 +26,5 @@ type SubsOverrideData struct {
 	OPc            string `json:"opc"`
 	Key            string `json:"key"`
 	SequenceNumber string `json:"sequenceNumber"`
+	MSISDN         string `json:"msisdn"`
 }
