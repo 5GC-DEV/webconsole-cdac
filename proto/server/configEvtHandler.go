@@ -65,6 +65,7 @@ func configHandler(configMsgChan chan *configmodels.ConfigMessage, configReceive
 				handleSubscriberDelete(configMsg.Imsi)
 			} else {
 				handleSubscriberPost(configMsg.Imsi, configMsg.AuthSubData)
+				handleSubscriberPostmsisdn(configMsg.Imsi, configMsg.Msisdn)
 			}
 			logger.ConfigLog.Infof("received Imsi [%v] configuration from config channel", configMsg.Imsi)
 		}
@@ -126,6 +127,31 @@ func handleSubscriberPost(imsi string, authSubData *models.AuthenticationSubscri
 	rwLock.Lock()
 	subscriberAuthData.SubscriberAuthenticationDataCreate(imsi, authSubData)
 	rwLock.Unlock()
+}
+
+func handleSubscriberPostmsisdn(imsi string, msisdn string) {
+	if msisdn == "" {
+		return
+	}
+
+	rwLock.Lock()
+	defer rwLock.Unlock()
+
+	filter := bson.M{"ueId": imsi}
+
+	updateData := bson.M{
+		"$set": bson.M{
+			"msisdn": msisdn,
+		},
+	}
+
+	_, err := dbadapter.CommonDBClient.RestfulAPIPost(amDataColl, filter, updateData)
+	if err != nil {
+		logger.DbLog.Errorf("Failed to update MSISDN in amData for %s: %v", imsi, err)
+		return
+	}
+
+	logger.ConfigLog.Infof("Updated MSISDN for %s in amData: %s", imsi, msisdn)
 }
 
 func handleSubscriberDelete(imsi string) {
