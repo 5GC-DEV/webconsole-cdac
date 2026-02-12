@@ -140,16 +140,16 @@ func handleSubscriberPostmsisdn(imsi string, msisdn string) {
 	filter := bson.M{"ueId": imsi}
 
 	updateData := bson.M{
-		"msisdn": msisdn,
+		"gpsis": []string{msisdn},
 	}
 
 	_, err := dbadapter.CommonDBClient.RestfulAPIPost(amDataColl, filter, updateData)
 	if err != nil {
-		logger.DbLog.Errorf("Failed to update MSISDN in amData for %s: %v", imsi, err)
+		logger.DbLog.Errorf("Failed to update GPSI in amData for %s: %v", imsi, err)
 		return
 	}
 
-	logger.ConfigLog.Infof("Updated MSISDN for %s in amData: %s", imsi, msisdn)
+	logger.ConfigLog.Infof("Updated GPSI for %s in amData: %s", imsi, msisdn)
 }
 
 func handleSubscriberDelete(imsi string) {
