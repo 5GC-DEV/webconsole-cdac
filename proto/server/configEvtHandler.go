@@ -140,9 +140,7 @@ func handleSubscriberPostmsisdn(imsi string, msisdn string) {
 	filter := bson.M{"ueId": imsi}
 
 	updateData := bson.M{
-		"$set": bson.M{
-			"msisdn": msisdn,
-		},
+		"msisdn": msisdn,
 	}
 
 	_, err := dbadapter.CommonDBClient.RestfulAPIPost(amDataColl, filter, updateData)
