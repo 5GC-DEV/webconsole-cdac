@@ -616,6 +616,9 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Device Group Deletion Failed"
                     }
                 }
             }
@@ -691,6 +694,9 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden"
+                    },
+                    "409": {
+                        "description": "Resource Conflict"
                     },
                     "500": {
                         "description": "Error creating gNB"
@@ -862,6 +868,9 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden"
+                    },
+                    "409": {
+                        "description": "Resource Conflict"
                     },
                     "500": {
                         "description": "Error creating UPF"
@@ -1248,11 +1257,20 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "ip-domain-expanded": {
-                    "$ref": "#/definitions/configmodels.DeviceGroupsIpDomainExpanded"
-                },
                 "ip-domain-name": {
                     "type": "string"
+                },
+                "ip-domains": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configmodels.DeviceGroupsIpDomainExpanded"
+                    }
+                },
+                "msisdns": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "site-info": {
                     "type": "string"

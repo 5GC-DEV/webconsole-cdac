@@ -1,0 +1,138 @@
+// SPDX-FileCopyrightText: 2025 Canonical Ltd
+//
+// SPDX-License-Identifier: Apache-2.0
+package nfconfig
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/omec-project/openapi/v2/nfConfigApi"
+)
+
+func TestGetImsiQosConfig(t *testing.T) {
+	tests := []struct {
+		name         string
+		imsi         string
+		inMemoryData []imsiQosConfig
+		expectedCode int
+		expectedData []nfConfigApi.ImsiQos
+	}{
+		{
+			name: "matching dnn and imsi found",
+			imsi: "imsi-001010000000001",
+			inMemoryData: []imsiQosConfig{
+				{
+					dnn:   "internet",
+					imsis: []string{"001010000000001"},
+					qos: []nfConfigApi.ImsiQos{
+						{
+							MbrUplink:        "20 Kbps",
+							MbrDownlink:      "100 Kbps",
+							FiveQi:           7,
+							ArpPriorityLevel: 32,
+						},
+					},
+				},
+			},
+			expectedCode: http.StatusOK,
+			expectedData: []nfConfigApi.ImsiQos{
+				{
+					MbrUplink:        "20 Kbps",
+					MbrDownlink:      "100 Kbps",
+					FiveQi:           7,
+					ArpPriorityLevel: 32,
+				},
+			},
+		},
+		{
+			name: "matching dnn but no imsi found",
+			imsi: "imsi-001010000000001",
+			inMemoryData: []imsiQosConfig{
+				{
+					dnn:   "internet",
+					imsis: []string{"999990000000000"},
+					qos: []nfConfigApi.ImsiQos{
+						{
+							MbrUplink:        "20 Kbps",
+							MbrDownlink:      "100 Kbps",
+							FiveQi:           7,
+							ArpPriorityLevel: 32,
+						},
+					},
+				},
+			},
+			expectedCode: http.StatusNotFound,
+			expectedData: []nfConfigApi.ImsiQos{},
+		},
+		{
+			name: "matching imsi but dnn not found",
+			imsi: "imsi-001010000000001",
+			inMemoryData: []imsiQosConfig{
+				{
+					dnn:   "internet2",
+					imsis: []string{"001010000000001"},
+					qos: []nfConfigApi.ImsiQos{
+						{
+							MbrUplink:        "20 Kbps",
+							MbrDownlink:      "100 Kbps",
+							FiveQi:           7,
+							ArpPriorityLevel: 32,
+						},
+					},
+				},
+			},
+			expectedCode: http.StatusNotFound,
+			expectedData: []nfConfigApi.ImsiQos{},
+		},
+		{
+			name:         "empty in memory config",
+			imsi:         "imsi-999990000000000",
+			inMemoryData: nil,
+			expectedCode: http.StatusNotFound,
+			expectedData: []nfConfigApi.ImsiQos{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			router := gin.New()
+
+			nfServer := &NFConfigServer{
+				Router:         router,
+				inMemoryConfig: inMemoryConfig{imsiQos: tc.inMemoryData},
+			}
+			nfServer.setupRoutes()
+			w := httptest.NewRecorder()
+			req, err := http.NewRequest(http.MethodGet, "/nfconfig/qos/"+"internet/"+tc.imsi, nil)
+			if err != nil {
+				t.Fatalf("fail create a request %v", err)
+			}
+			nfServer.Router.ServeHTTP(w, req)
+
+			if w.Code != tc.expectedCode {
+				t.Errorf("expected %v, got %v", tc.expectedCode, w.Code)
+			}
+			var got []nfConfigApi.ImsiQos
+			err = json.Unmarshal(w.Body.Bytes(), &got)
+			if err != nil {
+				t.Fatalf("fail to unmarshal body %v", err)
+			}
+			if len(got) != len(tc.expectedData) {
+				t.Fatalf("expected %d qos entries, got %d: %v", len(tc.expectedData), len(got), got)
+			}
+			for i := range got {
+				if got[i].GetMbrUplink() != tc.expectedData[i].GetMbrUplink() ||
+					got[i].GetMbrDownlink() != tc.expectedData[i].GetMbrDownlink() ||
+					got[i].GetFiveQi() != tc.expectedData[i].GetFiveQi() ||
+					got[i].GetArpPriorityLevel() != tc.expectedData[i].GetArpPriorityLevel() {
+					t.Errorf("expected %v, got %v", tc.expectedData, got)
+					break
+				}
+			}
+		})
+	}
+}

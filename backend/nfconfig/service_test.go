@@ -6,15 +6,69 @@ package nfconfig
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/omec-project/openapi/v2/nfConfigApi"
 	"github.com/omec-project/util/logger"
 	"github.com/omec-project/webconsole/backend/factory"
+	webconsoleLogger "github.com/omec-project/webconsole/backend/logger"
+	"github.com/omec-project/webconsole/configmodels"
+	"github.com/omec-project/webconsole/dbadapter"
+	"go.mongodb.org/mongo-driver/bson"
 )
+
+type MockDBClient struct {
+	dbadapter.DBInterface
+	Slices []configmodels.Slice
+	err    error
+}
+
+func (m *MockDBClient) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]any, error) {
+	var results []map[string]any
+	for _, s := range m.Slices {
+		ns := configmodels.ToBsonM(s)
+		if ns == nil {
+			webconsoleLogger.DbLog.Fatalln("failed to convert network slice to BsonM")
+		}
+		results = append(results, ns)
+	}
+	return results, m.err
+}
+
+func makeNetworkSlice(mcc, mnc, sst string, sd string, tacs []int32) configmodels.Slice {
+	plmnId := configmodels.SliceSiteInfoPlmn{
+		Mcc: mcc,
+		Mnc: mnc,
+	}
+	siteInfo := configmodels.SliceSiteInfo{
+		SiteName: "test",
+		Plmn:     plmnId,
+		GNodeBs:  []configmodels.SliceSiteInfoGNodeBs{},
+	}
+	for _, tac := range tacs {
+		gNodeB := configmodels.SliceSiteInfoGNodeBs{
+			Name: fmt.Sprintf("test-gnb-%d", tac),
+			Tac:  tac,
+		}
+		siteInfo.GNodeBs = append(siteInfo.GNodeBs, gNodeB)
+	}
+	sliceId := configmodels.SliceSliceId{
+		Sst: sst,
+		Sd:  sd,
+	}
+	networkSlice := configmodels.Slice{
+		SliceName: "slice" + sst + sd,
+		SliceId:   sliceId,
+		SiteInfo:  siteInfo,
+	}
+	return networkSlice
+}
 
 func TestNewNFConfig_nil_config(t *testing.T) {
 	_, err := NewNFConfigServer(nil)
@@ -126,6 +180,12 @@ func TestNewNFConfig_various_configs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			mockDB := &MockDBClient{
+				Slices: []configmodels.Slice{},
+			}
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
+			dbadapter.CommonDBClient = mockDB
 			nf, err := NewNFConfigServer(tc.config)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
@@ -152,6 +212,13 @@ func TestNFConfigRoutes(t *testing.T) {
 			},
 		},
 	}
+
+	mockDB := &MockDBClient{
+		Slices: []configmodels.Slice{},
+	}
+	originalDBClient := dbadapter.CommonDBClient
+	defer func() { dbadapter.CommonDBClient = originalDBClient }()
+	dbadapter.CommonDBClient = mockDB
 
 	nfInterface, err := NewNFConfigServer(mockValidConfig)
 	if err != nil {
@@ -200,6 +267,12 @@ func TestNFConfigRoutes(t *testing.T) {
 			wantStatus:   http.StatusOK,
 		},
 		{
+			name:         "imsi qos endpoint for missing configuraion returns not found",
+			path:         "/nfconfig/qos/internet/imsi-001011234567890",
+			acceptHeader: "application/json",
+			wantStatus:   http.StatusNotFound,
+		},
+		{
 			name:         "access mobility endpoint invalid accept header",
 			path:         "/nfconfig/access-mobility",
 			acceptHeader: "",
@@ -226,6 +299,12 @@ func TestNFConfigRoutes(t *testing.T) {
 		{
 			name:         "session management endpoint invalid accept header",
 			path:         "/nfconfig/session-management",
+			acceptHeader: "application/jsons",
+			wantStatus:   http.StatusBadRequest,
+		},
+		{
+			name:         "imsi qos endpoint invalid accept header",
+			path:         "/nfconfig/qos",
 			acceptHeader: "application/jsons",
 			wantStatus:   http.StatusBadRequest,
 		},
@@ -277,18 +356,24 @@ func TestNFConfigStart(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("Starting test: %s", tt.name)
 			gin.SetMode(gin.TestMode)
+			mockDB := &MockDBClient{
+				Slices: []configmodels.Slice{},
+			}
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
+			dbadapter.CommonDBClient = mockDB
 			nfconf := &NFConfigServer{
-				Config: tt.config,
+				config: tt.config,
 				Router: gin.New(),
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
 			errChan := make(chan error, 1)
-
+			syncChan := make(chan struct{}, 1)
 			go func() {
 				t.Logf("starting server")
-				err := nfconf.Start(ctx)
+				err := nfconf.Start(ctx, syncChan)
 				t.Logf("server stopped with error: %v", err)
 				errChan <- err
 			}()
@@ -315,24 +400,25 @@ func TestNFConfigStart(t *testing.T) {
 func TestNFConfig_Start_ServerError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	nfc1 := &NFConfigServer{
-		Config: &factory.Configuration{},
+		config: &factory.Configuration{},
 		Router: gin.New(),
 	}
 	nfc2 := &NFConfigServer{
-		Config: &factory.Configuration{},
+		config: &factory.Configuration{},
 		Router: gin.New(),
 	}
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
 
 	errChan := make(chan error, 1)
+	syncChan := make(chan struct{}, 1)
 	go func() {
-		errChan <- nfc1.Start(ctx1)
+		errChan <- nfc1.Start(ctx1, syncChan)
 	}()
 	time.Sleep(10 * time.Millisecond)
 
 	ctx2 := context.Background()
-	err := nfc2.Start(ctx2)
+	err := nfc2.Start(ctx2, syncChan)
 	if err == nil {
 		t.Error("expected error when starting server on same port, got nil")
 	}
@@ -343,13 +429,14 @@ func TestNFConfig_Start_ServerError(t *testing.T) {
 func TestNFConfig_Start_ContextCancellation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	nfc := &NFConfigServer{
-		Config: &factory.Configuration{},
+		config: &factory.Configuration{},
 		Router: gin.New(),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	errChan := make(chan error)
+	syncChan := make(chan struct{}, 1)
 	go func() {
-		errChan <- nfc.Start(ctx)
+		errChan <- nfc.Start(ctx, syncChan)
 	}()
 	time.Sleep(100 * time.Millisecond)
 	t.Logf("triggering context cancellation")
@@ -357,5 +444,262 @@ func TestNFConfig_Start_ContextCancellation(t *testing.T) {
 	err := <-errChan
 	if err != nil {
 		t.Errorf("got error = %v, want nil after context cancellation", err)
+	}
+}
+
+func TestSyncWithRetry_Success_CallsSyncInMemoryConfig(t *testing.T) {
+	n := &NFConfigServer{}
+
+	called := false
+	originalSyncInMemoryFunc := syncInMemoryConfigFunc
+	defer func() { syncInMemoryConfigFunc = originalSyncInMemoryFunc }()
+	syncInMemoryConfigFunc = func(n *NFConfigServer) error {
+		called = true
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	n.syncWithRetry(ctx)
+	time.Sleep(100 * time.Millisecond)
+
+	if !called {
+		t.Fatal("expected syncInMemoryConfig to be called")
+	}
+	cancel()
+}
+
+func TestSyncWithRetry_RetryInCaseOfFailure(t *testing.T) {
+	n := &NFConfigServer{}
+
+	callCount := 0
+	originalSyncInMemoryFunc := syncInMemoryConfigFunc
+	defer func() { syncInMemoryConfigFunc = originalSyncInMemoryFunc }()
+	syncInMemoryConfigFunc = func(n *NFConfigServer) error {
+		callCount++
+		if callCount < 3 {
+			return fmt.Errorf("mock error")
+		}
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	n.syncWithRetry(ctx)
+
+	time.Sleep(10 * time.Second)
+	if callCount != 3 {
+		t.Fatalf("expected 3 calls to syncInMemoryConfigFunc, got %d", callCount)
+	}
+	cancel()
+}
+
+func TestSyncInMemoryConfig_UpdateAllConfigs(t *testing.T) {
+	tests := []struct {
+		name                      string
+		slices                    []configmodels.Slice
+		expectedPlmn              []nfConfigApi.PlmnId
+		expectedPlmnSnssai        []nfConfigApi.PlmnSnssai
+		expectedAccessAndMobility []nfConfigApi.AccessAndMobility
+		expectedSessionManagement []nfConfigApi.SessionManagement
+		expectedPolicyControl     []nfConfigApi.PolicyControl
+	}{
+		{
+			name: "Two slices same PLMN different S-NSSAI",
+			slices: []configmodels.Slice{
+				makeNetworkSlice("123", "23", "2", "abcd", []int32{1}),
+				makeNetworkSlice("123", "23", "1", "01234", []int32{2}),
+			},
+			expectedPlmn: []nfConfigApi.PlmnId{
+				*nfConfigApi.NewPlmnId("123", "23"),
+			},
+			expectedPlmnSnssai: []nfConfigApi.PlmnSnssai{
+				{
+					PlmnId: *nfConfigApi.NewPlmnId("123", "23"),
+					SNssaiList: []nfConfigApi.Snssai{
+						makeSnssaiWithSd(1, "01234"),
+						makeSnssaiWithSd(2, "abcd"),
+					},
+				},
+			},
+			expectedAccessAndMobility: []nfConfigApi.AccessAndMobility{
+				{
+					PlmnId: *nfConfigApi.NewPlmnId("123", "23"),
+					Snssai: makeSnssaiWithSd(1, "01234"),
+					Tacs:   []string{"2"},
+				},
+				{
+					PlmnId: *nfConfigApi.NewPlmnId("123", "23"),
+					Snssai: makeSnssaiWithSd(2, "abcd"),
+					Tacs:   []string{"1"},
+				},
+			},
+			expectedSessionManagement: []nfConfigApi.SessionManagement{
+				{
+					SliceName: "slice101234",
+					PlmnId:    *nfConfigApi.NewPlmnId("123", "23"),
+					Snssai:    makeSnssaiWithSd(1, "01234"),
+					GnbNames:  []string{"test-gnb-2"},
+				},
+				{
+					SliceName: "slice2abcd",
+					PlmnId:    *nfConfigApi.NewPlmnId("123", "23"),
+					Snssai:    makeSnssaiWithSd(2, "abcd"),
+					GnbNames:  []string{"test-gnb-1"},
+				},
+			},
+			expectedPolicyControl: []nfConfigApi.PolicyControl{
+				{
+					PlmnId:   *nfConfigApi.NewPlmnId("123", "23"),
+					Snssai:   makeSnssaiWithSd(1, "01234"),
+					Dnns:     []string{},
+					PccRules: []nfConfigApi.PccRule{*defaultPccRule},
+				},
+				{
+					PlmnId:   *nfConfigApi.NewPlmnId("123", "23"),
+					Snssai:   makeSnssaiWithSd(2, "abcd"),
+					Dnns:     []string{},
+					PccRules: []nfConfigApi.PccRule{*defaultPccRule},
+				},
+			},
+		},
+		{
+			name:                      "Empty slices",
+			slices:                    []configmodels.Slice{},
+			expectedPlmn:              []nfConfigApi.PlmnId{},
+			expectedPlmnSnssai:        []nfConfigApi.PlmnSnssai{},
+			expectedAccessAndMobility: []nfConfigApi.AccessAndMobility{},
+			expectedSessionManagement: []nfConfigApi.SessionManagement{},
+			expectedPolicyControl:     []nfConfigApi.PolicyControl{},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mockDB := &MockDBClient{
+				Slices: tc.slices,
+			}
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
+			dbadapter.CommonDBClient = mockDB
+			n := &NFConfigServer{
+				inMemoryConfig: inMemoryConfig{},
+			}
+
+			err := n.syncInMemoryConfig()
+			if err != nil {
+				t.Errorf("expected no error. Got %s", err)
+			}
+			if !reflect.DeepEqual(tc.expectedPlmn, n.inMemoryConfig.plmn) {
+				t.Errorf("expected PLMN %+v, got %+v", tc.expectedPlmn, n.inMemoryConfig.plmn)
+			}
+			if !reflect.DeepEqual(tc.expectedPlmnSnssai, n.inMemoryConfig.plmnSnssai) {
+				t.Errorf("expected PLMN-SNSSAI %+v, got %+v", tc.expectedPlmnSnssai, n.inMemoryConfig.plmnSnssai)
+			}
+			if !reflect.DeepEqual(tc.expectedAccessAndMobility, n.inMemoryConfig.accessAndMobility) {
+				t.Errorf("expected Access and Mobility %+v, got %+v", tc.expectedAccessAndMobility, n.inMemoryConfig.accessAndMobility)
+			}
+			if !reflect.DeepEqual(tc.expectedSessionManagement, n.inMemoryConfig.sessionManagement) {
+				t.Errorf("expected Session Management %+v, got %+v", tc.expectedSessionManagement, n.inMemoryConfig.sessionManagement)
+			}
+			if !reflect.DeepEqual(tc.expectedPolicyControl, n.inMemoryConfig.policyControl) {
+				t.Errorf("expected Policy Control %+v, got %+v", tc.expectedPolicyControl, n.inMemoryConfig.policyControl)
+			}
+		})
+	}
+}
+
+func TestSyncInMemoryConfig_DBError_KeepsPreviousConfig(t *testing.T) {
+	tests := []struct {
+		name                      string
+		expectedPlmn              []nfConfigApi.PlmnId
+		expectedPlmnSnssai        []nfConfigApi.PlmnSnssai
+		expectedAccessAndMobility []nfConfigApi.AccessAndMobility
+		expectedSessionManagement []nfConfigApi.SessionManagement
+		expectedPolicyControl     []nfConfigApi.PolicyControl
+	}{
+		{
+			name:                      "Initial empty PLMN S-NSSAI config",
+			expectedPlmn:              []nfConfigApi.PlmnId{},
+			expectedPlmnSnssai:        []nfConfigApi.PlmnSnssai{},
+			expectedAccessAndMobility: []nfConfigApi.AccessAndMobility{},
+			expectedSessionManagement: []nfConfigApi.SessionManagement{},
+			expectedPolicyControl:     []nfConfigApi.PolicyControl{},
+		},
+		{
+			name: "Initial not empty PLMN S-NSSAI config",
+			expectedPlmn: []nfConfigApi.PlmnId{
+				*nfConfigApi.NewPlmnId("44", "22"),
+				*nfConfigApi.NewPlmnId("167", "24"),
+			},
+			expectedPlmnSnssai: []nfConfigApi.PlmnSnssai{
+				{
+					PlmnId: *nfConfigApi.NewPlmnId("123", "23"),
+					SNssaiList: []nfConfigApi.Snssai{
+						makeSnssaiWithSd(1, "01234"),
+						makeSnssaiWithSd(2, "abcd"),
+					},
+				},
+			},
+			expectedAccessAndMobility: []nfConfigApi.AccessAndMobility{
+				{
+					PlmnId: *nfConfigApi.NewPlmnId("123", "23"),
+					Snssai: makeSnssaiWithSd(1, "01234"),
+					Tacs:   []string{"1", "2"},
+				},
+			},
+			expectedSessionManagement: []nfConfigApi.SessionManagement{
+				{
+					SliceName: "name",
+					PlmnId:    nfConfigApi.PlmnId{Mcc: "67", Mnc: "23"},
+					Snssai:    makeSnssaiWithSd(1, "01234"),
+					Upf:       nil,
+					GnbNames:  []string{"gnb1", "gnb3"},
+				},
+			},
+			expectedPolicyControl: []nfConfigApi.PolicyControl{
+				{
+					PlmnId:   nfConfigApi.PlmnId{Mcc: "123", Mnc: "87"},
+					Snssai:   makeSnssaiWithSd(1, "01234"),
+					PccRules: []nfConfigApi.PccRule{},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mockDB := &MockDBClient{
+				Slices: []configmodels.Slice{makeNetworkSlice("999", "99", "9", "999", []int32{1})},
+				err:    fmt.Errorf("mock error"),
+			}
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
+			dbadapter.CommonDBClient = mockDB
+			n := &NFConfigServer{
+				inMemoryConfig: inMemoryConfig{
+					plmn:              tc.expectedPlmn,
+					plmnSnssai:        tc.expectedPlmnSnssai,
+					accessAndMobility: tc.expectedAccessAndMobility,
+					sessionManagement: tc.expectedSessionManagement,
+					policyControl:     tc.expectedPolicyControl,
+				},
+			}
+
+			err := n.syncInMemoryConfig()
+
+			if err == nil {
+				t.Errorf("expected error. Got nil")
+			}
+			if !reflect.DeepEqual(tc.expectedPlmn, n.inMemoryConfig.plmn) {
+				t.Errorf("expected PLMN %v, got %v", tc.expectedPlmn, n.inMemoryConfig.plmn)
+			}
+			if !reflect.DeepEqual(tc.expectedPlmnSnssai, n.inMemoryConfig.plmnSnssai) {
+				t.Errorf("expected PLMN-SNSSAI %v, got %v", tc.expectedPlmnSnssai, n.inMemoryConfig.plmnSnssai)
+			}
+			if !reflect.DeepEqual(tc.expectedAccessAndMobility, n.inMemoryConfig.accessAndMobility) {
+				t.Errorf("expected Access and Mobility %v, got %v", tc.expectedAccessAndMobility, n.inMemoryConfig.accessAndMobility)
+			}
+			if !reflect.DeepEqual(tc.expectedSessionManagement, n.inMemoryConfig.sessionManagement) {
+				t.Errorf("expected Session Management %+v, got %+v", tc.expectedSessionManagement, n.inMemoryConfig.sessionManagement)
+			}
+			if !reflect.DeepEqual(tc.expectedPolicyControl, n.inMemoryConfig.policyControl) {
+				t.Errorf("expected Policy Control %+v, got %+v", tc.expectedPolicyControl, n.inMemoryConfig.policyControl)
+			}
+		})
 	}
 }

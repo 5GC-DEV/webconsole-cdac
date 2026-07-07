@@ -1,13 +1,15 @@
+// Copyright (C) 2026 Intel Corporation
+// SPDX-FileCopyrightText: 2024 Canonical Ltd
 // SPDX-FileCopyrightText: 2024 Open Networking Foundation <info@opennetworking.org>
 // SPDX-FileCopyrightText: 2019 free5GC.org
-// SPDX-FileCopyrightText: 2024 Canonical Ltd
-//
 // SPDX-License-Identifier: Apache-2.0
 package dbadapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/omec-project/util/mongoapi"
@@ -44,6 +46,13 @@ type DBInterface interface {
 	CreateIndex(collName string, keyField string) (bool, error)
 	StartSession() (mongo.Session, error)
 	SupportsTransactions() (bool, error)
+	RestfulAPIPostOnDB(ctx context.Context, dbName string, collName string, filter bson.M, postData map[string]interface{}) (bool, error)
+	RestfulAPIPutOneOnDB(ctx context.Context, dbName string, collName string, filter bson.M, putData map[string]interface{}) (bool, error)
+	RestfulAPIDeleteOneOnDB(ctx context.Context, dbName string, collName string, filter bson.M) error
+}
+
+type indexCreator interface {
+	CreateIndex(collName string, keyField string) (bool, error)
 }
 
 var (
@@ -55,6 +64,23 @@ var (
 type MongoDBClient struct {
 	mongoapi.MongoClient
 }
+type SessionRunner func(ctx context.Context, fn func(sc mongo.SessionContext) error) error
+
+func GetSessionRunner(client DBInterface) SessionRunner {
+	return func(ctx context.Context, fn func(sc mongo.SessionContext) error) error {
+		session, err := client.StartSession()
+		if err != nil {
+			return err
+		}
+		defer session.EndSession(ctx)
+		return mongo.WithSession(ctx, session, func(sc mongo.SessionContext) error {
+			_, err = session.WithTransaction(sc, func(sc mongo.SessionContext) (interface{}, error) {
+				return nil, fn(sc)
+			})
+			return err
+		})
+	}
+}
 
 type PatchOperation struct {
 	Value interface{} `json:"value,omitempty"`
@@ -64,10 +90,10 @@ type PatchOperation struct {
 
 func setDBClient(url, dbname string) (DBInterface, error) {
 	mClient, errConnect := mongoapi.NewMongoClient(url, dbname)
-	if mClient.Client != nil {
-		return mClient, nil
+	if errConnect != nil {
+		return nil, errConnect
 	}
-	return nil, errConnect
+	return &MongoDBClient{*mClient}, nil
 }
 
 func ConnectMongo(url string, dbname string, client *DBInterface) {
@@ -112,7 +138,7 @@ func CheckTransactionsSupport(client *DBInterface) error {
 		case <-ticker.C:
 			// Continue to check after each tick
 		case <-timer:
-			return fmt.Errorf("timed out while waiting for Replica Set or sharded config to be set in MongoDB")
+			return fmt.Errorf("timed out while waiting for replica set or sharded config to be set in MongoDB")
 		}
 	}
 	logger.DbLog.Infoln("mongoDB support of transactions verified")
@@ -126,37 +152,35 @@ func InitMongoDB() error {
 
 	mongodb := factory.WebUIConfig.Configuration.Mongodb
 	logger.InitLog.Infow("MongoDB configuration loaded",
-		"mode5G", factory.WebUIConfig.Configuration.Mode5G,
 		"enableAuth", factory.WebUIConfig.Configuration.EnableAuthentication)
 
-	if factory.WebUIConfig.Configuration.Mode5G {
-		ConnectMongo(mongodb.Url, mongodb.Name, &CommonDBClient)
-		logger.InitLog.Infow("Connected to common database",
-			"url", mongodb.Url,
-			"dbName", mongodb.Name)
+	ConnectMongo(mongodb.Url, mongodb.Name, &CommonDBClient)
+	logger.InitLog.Infow("Connected to common database",
+		"url", mongodb.Url,
+		"dbName", mongodb.Name)
 
-		if err := CheckTransactionsSupport(&CommonDBClient); err != nil {
-			logger.DbLog.Errorw("failed to connect to MongoDB client", mongodb.Name, "error", err)
-			return err
-		}
-
-		ConnectMongo(mongodb.AuthUrl, mongodb.AuthKeysDbName, &AuthDBClient)
-		logger.InitLog.Infow("Connected to auth database",
-			"url", mongodb.AuthUrl,
-			"dbName", mongodb.AuthKeysDbName)
-
-		if resp, err := CommonDBClient.CreateIndex(configmodels.UpfDataColl, "hostname"); !resp || err != nil {
-			logger.InitLog.Errorf("error creating UPF index in commonDB %v", err)
-			return err
-		}
-		if resp, err := CommonDBClient.CreateIndex(configmodels.GnbDataColl, "name"); !resp || err != nil {
-			logger.InitLog.Errorf("error creating gNB index in commonDB %v", err)
-			return err
-		}
+	if err := CheckTransactionsSupport(&CommonDBClient); err != nil {
+		logger.DbLog.Errorw("failed to connect to MongoDB client", mongodb.Name, "error", err)
+		return err
 	}
+
+	ConnectMongo(mongodb.AuthUrl, mongodb.AuthKeysDbName, &AuthDBClient)
+	logger.InitLog.Infow("Connected to auth database",
+		"url", mongodb.AuthUrl,
+		"dbName", mongodb.AuthKeysDbName)
+
+	if err := createIndexWithRetry(CommonDBClient, configmodels.UpfDataColl, "hostname", 180*time.Second, 2*time.Second); err != nil {
+		logger.InitLog.Errorf("error creating UPF index in commonDB %v", err)
+		return err
+	}
+	if err := createIndexWithRetry(CommonDBClient, configmodels.GnbDataColl, "name", 180*time.Second, 2*time.Second); err != nil {
+		logger.InitLog.Errorf("error creating gNB index in commonDB %v", err)
+		return err
+	}
+
 	if factory.WebUIConfig.Configuration.EnableAuthentication {
 		ConnectMongo(mongodb.WebuiDBUrl, mongodb.WebuiDBName, &WebuiDBClient)
-		if resp, err := WebuiDBClient.CreateIndex(configmodels.UserAccountDataColl, "username"); !resp || err != nil {
+		if err := createIndexWithRetry(WebuiDBClient, configmodels.UserAccountDataColl, "username", 180*time.Second, 2*time.Second); err != nil {
 			logger.InitLog.Errorf("error initializing webuiDB %v", err)
 			return err
 		}
@@ -164,6 +188,106 @@ func InitMongoDB() error {
 
 	logger.InitLog.Info("MongoDB initialization completed successfully")
 	return nil
+}
+
+func createIndexWithRetry(client indexCreator, collName string, keyField string, timeout, retryInterval time.Duration) error {
+	if client == nil {
+		return fmt.Errorf("mongoDB client has not been initialized")
+	}
+
+	ticker := time.NewTicker(retryInterval)
+	defer ticker.Stop()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	for {
+		resp, err := client.CreateIndex(collName, keyField)
+		if err == nil && resp {
+			return nil
+		}
+
+		if err == nil && !resp {
+			err = fmt.Errorf("CreateIndex returned false for %s.%s", collName, keyField)
+		}
+
+		if !isRetryableIndexError(err) {
+			return err
+		}
+
+		logger.InitLog.Warnw("retrying MongoDB index creation",
+			"collection", collName,
+			"keyField", keyField,
+			"error", err)
+
+		select {
+		case <-ticker.C:
+			continue
+		case <-timer.C:
+			return fmt.Errorf("timed out creating index for %s.%s: %w", collName, keyField, err)
+		}
+	}
+}
+
+func isRetryableIndexError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var commandErr mongo.CommandError
+	if errors.As(err, &commandErr) {
+		if commandErr.HasErrorLabel("RetryableWriteError") || commandErr.HasErrorLabel("TransientTransactionError") {
+			return true
+		}
+	}
+
+	var writeException mongo.WriteException
+	if errors.As(err, &writeException) {
+		if writeException.HasErrorLabel("RetryableWriteError") || writeException.HasErrorLabel("TransientTransactionError") {
+			return true
+		}
+		if writeException.WriteConcernError != nil && isRetryableMongoMessage(writeException.WriteConcernError.Message) {
+			return true
+		}
+		for _, writeErr := range writeException.WriteErrors {
+			if isRetryableMongoMessage(writeErr.Message) {
+				return true
+			}
+		}
+	}
+
+	var serverErr mongo.ServerError
+	if errors.As(err, &serverErr) {
+		if serverErr.HasErrorLabel("RetryableWriteError") || serverErr.HasErrorLabel("TransientTransactionError") {
+			return true
+		}
+	}
+
+	return isRetryableMongoMessage(err.Error())
+}
+
+func isRetryableMongoMessage(message string) bool {
+	lowerMsg := strings.ToLower(message)
+	transientFragments := []string{
+		"interruptedatshutdown",
+		"interrupted at shutdown",
+		"notwritableprimary",
+		"not primary",
+		"node is recovering",
+		"primary stepped down",
+		"connection",
+		"server selection",
+		"topology",
+		"context deadline exceeded",
+		"election",
+	}
+
+	for _, fragment := range transientFragments {
+		if strings.Contains(lowerMsg, fragment) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (db *MongoDBClient) RestfulAPIGetOne(collName string, filter bson.M) (map[string]interface{}, error) {
@@ -260,4 +384,50 @@ func (db *MongoDBClient) StartSession() (mongo.Session, error) {
 
 func (db *MongoDBClient) SupportsTransactions() (bool, error) {
 	return db.MongoClient.SupportsTransactions()
+}
+
+func (db *MongoDBClient) RestfulAPIPostOnDB(ctx context.Context, dbName string, collName string, filter bson.M, postData map[string]interface{}) (bool, error) {
+	collection := db.Client.Database(dbName).Collection(collName)
+	var existing bson.M
+	err := collection.FindOne(ctx, filter).Decode(&existing)
+	if err != nil && err != mongo.ErrNoDocuments {
+		return false, fmt.Errorf("RestfulAPIPostOnDB FindOne err: %+v", err)
+	}
+	if existing != nil {
+		if _, err := collection.UpdateOne(ctx, filter, bson.M{"$set": postData}); err != nil {
+			return false, fmt.Errorf("RestfulAPIPostOnDB UpdateOne err: %+v", err)
+		}
+		return true, nil
+	}
+	if _, err := collection.InsertOne(ctx, postData); err != nil {
+		return false, fmt.Errorf("RestfulAPIPostOnDB InsertOne err: %+v", err)
+	}
+	return false, nil
+}
+
+func (db *MongoDBClient) RestfulAPIPutOneOnDB(ctx context.Context, dbName string, collName string, filter bson.M, putData map[string]interface{}) (bool, error) {
+	collection := db.Client.Database(dbName).Collection(collName)
+	var existing bson.M
+	err := collection.FindOne(ctx, filter).Decode(&existing)
+	if err != nil && err != mongo.ErrNoDocuments {
+		return false, fmt.Errorf("RestfulAPIPutOneOnDB FindOne err: %+v", err)
+	}
+	if existing != nil {
+		if _, err := collection.UpdateOne(ctx, filter, bson.M{"$set": putData}); err != nil {
+			return false, fmt.Errorf("RestfulAPIPutOneOnDB UpdateOne err: %+v", err)
+		}
+		return true, nil
+	}
+	if _, err := collection.InsertOne(ctx, putData); err != nil {
+		return false, fmt.Errorf("RestfulAPIPutOneOnDB InsertOne err: %+v", err)
+	}
+	return false, nil
+}
+
+func (db *MongoDBClient) RestfulAPIDeleteOneOnDB(ctx context.Context, dbName string, collName string, filter bson.M) error {
+	collection := db.Client.Database(dbName).Collection(collName)
+	if _, err := collection.DeleteOne(ctx, filter); err != nil {
+		return fmt.Errorf("RestfulAPIDeleteOneOnDB err: %+v", err)
+	}
+	return nil
 }

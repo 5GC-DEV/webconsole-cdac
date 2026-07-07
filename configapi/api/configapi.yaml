@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Open Networking Foundation <info@opennetworking.org>
 #
 # SPDX-License-Identifier: Apache-2.0
-# 
+#
 
 openapi: 3.0.0
 info:
@@ -118,14 +118,21 @@ components:
             example: "123456789123456"
             type: string
           type: array
+        msisdns:
+          items:
+            example: "1234567890"
+            type: string
+          type: array
         site-info:
           example: menlo..add site info
           type: string
         ip-domain-name:
           example: pool1
           type: string
-        ip-domain-expanded:
-          $ref: '#/components/schemas/device_groups_ip_domain_expanded'
+        ip-domains:
+          items:
+            $ref: '#/components/schemas/device_groups_ip_domain_expanded'
+          type: array
       type: object
     slice:
       properties:
@@ -169,6 +176,9 @@ components:
           type: string
         dns-primary:
           example: 8.8.8.8
+          type: string
+        pcscf-primary:
+          example: 10.10.10.10
           type: string
         dns-secondary:
           nullable: false
