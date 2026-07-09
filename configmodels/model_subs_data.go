@@ -6,7 +6,7 @@
 package configmodels
 
 import (
-	"github.com/omec-project/openapi/v2/models"
+	"github.com/5GC-DEV/openapi-cdac/v2/models"
 )
 
 type SubsData struct {

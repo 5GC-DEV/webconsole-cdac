@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/5GC-DEV/openapi-cdac/v2/nfConfigApi"
 	"github.com/gin-gonic/gin"
-	"github.com/omec-project/openapi/v2/nfConfigApi"
 	"github.com/omec-project/util/logger"
 	"github.com/omec-project/webconsole/backend/factory"
 	webconsoleLogger "github.com/omec-project/webconsole/backend/logger"

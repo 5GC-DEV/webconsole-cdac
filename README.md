@@ -83,16 +83,16 @@ There are six endpoints exposed by this service.
 
 | Endpoint Name        | NF                  | HTTP Method | Path                           | Body  | Response          |
 |----------------------|---------------------|-------------|--------------------------------|-------|--------------------------|
-| Access and Mobility  | AMF                 | GET         | `/nfconfig/access-mobility`    | None  | [List of AccessAndMobility](https://github.com/omec-project/openapi/blob/main/nfConfigApi/model_access_and_mobility.go) |
-| PLMN ID              | AUSF NRF UDM UDR    | GET         | `/nfconfig/plmn`               | None  | [List of Plmns](https://github.com/omec-project/openapi/blob/main/nfConfigApi/model_plmn_id.go)             |
-| PLMN-SNSSAI          | NSSF                | GET         | `/nfconfig/plmn-snssai`        | None  | [List of Plmn-Snssai ](https://github.com/omec-project/openapi/blob/main/nfConfigApi/model_plmn_snssai.go)         |
-| Policy Control       | PCF                 | GET         | `/nfconfig/policy-control`     | None  | [List of PolicyControl](https://github.com/omec-project/openapi/blob/main/nfConfigApi/model_policy_control.go)      |
-| Session Management   | SMF                 | GET         | `/nfconfig/session-management` | None  | [List of Session Management](https://github.com/omec-project/openapi/blob/main/nfConfigApi/model_session_management.go)  |
-| IMSI QoS             | PCF                 | GET         | `/nfconfig/qos/{dnn}/{imsi}`   | None  | [List of ImsiQoS](https://github.com/omec-project/openapi/blob/main/nfConfigApi/model_imsi_qos.go)            |
+| Access and Mobility  | AMF                 | GET         | `/nfconfig/access-mobility`    | None  | [List of AccessAndMobility](https://github.com/5GC-DEV/openapi-cdac/blob/main/nfConfigApi/model_access_and_mobility.go) |
+| PLMN ID              | AUSF NRF UDM UDR    | GET         | `/nfconfig/plmn`               | None  | [List of Plmns](https://github.com/5GC-DEV/openapi-cdac/blob/main/nfConfigApi/model_plmn_id.go)             |
+| PLMN-SNSSAI          | NSSF                | GET         | `/nfconfig/plmn-snssai`        | None  | [List of Plmn-Snssai ](https://github.com/5GC-DEV/openapi-cdac/blob/main/nfConfigApi/model_plmn_snssai.go)         |
+| Policy Control       | PCF                 | GET         | `/nfconfig/policy-control`     | None  | [List of PolicyControl](https://github.com/5GC-DEV/openapi-cdac/blob/main/nfConfigApi/model_policy_control.go)      |
+| Session Management   | SMF                 | GET         | `/nfconfig/session-management` | None  | [List of Session Management](https://github.com/5GC-DEV/openapi-cdac/blob/main/nfConfigApi/model_session_management.go)  |
+| IMSI QoS             | PCF                 | GET         | `/nfconfig/qos/{dnn}/{imsi}`   | None  | [List of ImsiQoS](https://github.com/5GC-DEV/openapi-cdac/blob/main/nfConfigApi/model_imsi_qos.go)            |
 
 To make modifications to the NF Config API, please refer to the
-[NF config API documentation](https://github.com/omec-project/openapi/blob/main/nfConfigApi/README.md)
-in the [openapi](https://github.com/omec-project/openapi) repository.
+[NF config API documentation](https://github.com/5GC-DEV/openapi-cdac/blob/main/nfConfigApi/README.md)
+in the [openapi](https://github.com/5GC-DEV/openapi-cdac) repository.
 
 ## Upcoming Features
 

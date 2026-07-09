@@ -10,8 +10,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/5GC-DEV/openapi-cdac/v2/nfConfigApi"
 	"github.com/gin-gonic/gin"
-	"github.com/omec-project/openapi/v2/nfConfigApi"
 	"github.com/omec-project/webconsole/backend/logger"
 )
 

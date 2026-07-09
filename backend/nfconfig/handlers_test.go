@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/5GC-DEV/openapi-cdac/v2/nfConfigApi"
 	"github.com/gin-gonic/gin"
-	"github.com/omec-project/openapi/v2/nfConfigApi"
 )
 
 func TestGetImsiQosConfig(t *testing.T) {
