@@ -3,7 +3,7 @@ module github.com/omec-project/webconsole
 go 1.25.0
 
 require (
-	github.com/5GC-DEV/openapi-cdac/v2 v2.0.0-20260708134214-1e930a3d948b
+	github.com/5GC-DEV/openapi-cdac/v2 v2.0.0-20260709101533-7c1bcc29a402
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-viper/mapstructure/v2 v2.5.0

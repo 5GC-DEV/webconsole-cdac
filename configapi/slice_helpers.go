@@ -373,36 +373,166 @@ func updateSmPolicyData(snssai *models.Snssai, dnnMap map[string][]configmodels.
 	return nil
 }
 
-func updateAmProvisionedData(gpsi string, snssai *models.Snssai, aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) error {
-	var gpsiSlice []string // Initialize a slice to hold the GPSI.
-	if gpsi != "" {        // Only add if gpsi is not empty
-		gpsiSlice = []string{gpsi}
+func updateAmProvisionedData(
+	gpsi string,
+	snssai *models.Snssai,
+	aggregatedQoS configmodels.DeviceGroupsIpDomainExpandedUeDnnQos,
+	mcc, mnc, imsi string,
+) error {
+
+	servingPlmn := mcc + mnc
+	if servingPlmn == "" {
+		err := fmt.Errorf("servingPlmnId cannot be empty for IMSI %s", imsi)
+		logger.DbLog.Error(err)
+		return err
 	}
-	amData := models.AccessAndMobilitySubscriptionData{
-		Gpsis: gpsiSlice,
-		Nssai: *models.NewNullableNssai(&models.Nssai{
-			DefaultSingleNssais: []models.Snssai{*snssai},
-			SingleNssais:        []models.Snssai{*snssai},
-		}),
-		SubscribedUeAmbr: models.NewAmbr(ConvertToString(uint64(aggregatedQoS.DnnMbrUplink)), ConvertToString(uint64(aggregatedQoS.DnnMbrDownlink))),
-	}
-	amDataBsonA := configmodels.ToBsonM(amData)
-	amDataBsonA["ueId"] = "imsi-" + imsi
-	amDataBsonA["servingPlmnId"] = mcc + mnc
+
+	ueId := "imsi-" + imsi
+
+	// Backward-compatible filter
 	filter := bson.M{
-		"ueId": "imsi-" + imsi,
+		"ueId": ueId,
 		"$or": []bson.M{
-			{"servingPlmnId": mcc + mnc},
+			{"servingPlmnId": servingPlmn},
+			{"servingPlmnId": ""},
 			{"servingPlmnId": bson.M{"$exists": false}},
 		},
 	}
-	_, err := dbadapter.CommonDBClient.RestfulAPIPost(amDataColl, filter, amDataBsonA)
-	if err != nil {
-		logger.DbLog.Errorf("failed to update AM provisioned Data for IMSI %s: %+v", imsi, err)
+
+	existingRecord, err := dbadapter.CommonDBClient.RestfulAPIGetOne(amDataColl, filter)
+	if err != nil && err.Error() != "mongo: no documents in result" {
+		logger.DbLog.Errorf("Failed to fetch AM data for ueId %s: %v", ueId, err)
 		return err
 	}
-	logger.DbLog.Debugf("succeeded to update AM provisioned Data for IMSI %s", imsi)
+
+	var amData models.AccessAndMobilitySubscriptionData
+
+	// Create or load existing document
+	if existingRecord == nil {
+		amData = models.AccessAndMobilitySubscriptionData{}
+	} else {
+		bsonBytes, err := bson.Marshal(existingRecord)
+		if err != nil {
+			logger.DbLog.Errorf("Failed to marshal existing AM data: %v", err)
+			return err
+		}
+
+		if err = bson.Unmarshal(bsonBytes, &amData); err != nil {
+			logger.DbLog.Errorf("Failed to unmarshal existing AM data: %v", err)
+			return err
+		}
+	}
+
+	// Initialize NullableNssai
+	if amData.Nssai.Get() == nil {
+		amData.Nssai = *models.NewNullableNssai(&models.Nssai{})
+	}
+
+	nssaiData := amData.Nssai.Get()
+
+	// Remove duplicates
+	nssaiData.SingleNssais = uniqueSnssaiList(nssaiData.SingleNssais)
+	nssaiData.DefaultSingleNssais = uniqueSnssaiList(nssaiData.DefaultSingleNssais)
+
+	// Merge GPSI
+	if gpsi != "" && !containsString(amData.Gpsis, gpsi) {
+		amData.Gpsis = append(amData.Gpsis, gpsi)
+	}
+
+	// Merge S-NSSAI
+	if snssai != nil {
+		nextSlice := normalizeSnssai(*snssai)
+
+		if !containsSnssai(nssaiData.SingleNssais, nextSlice) {
+			logger.DbLog.Infof("Adding S-NSSAI %+v to subscriber %s", nextSlice, imsi)
+			nssaiData.SingleNssais = append(nssaiData.SingleNssais, nextSlice)
+		}
+
+		if !containsSnssai(nssaiData.DefaultSingleNssais, nextSlice) {
+			nssaiData.DefaultSingleNssais = append(nssaiData.DefaultSingleNssais, nextSlice)
+		}
+	}
+
+	// Save back to NullableNssai
+	amData.Nssai = *models.NewNullableNssai(nssaiData)
+
+	// Update UE AMBR
+	amData.SubscribedUeAmbr = models.NewAmbr(
+		ConvertToString(uint64(aggregatedQoS.DnnMbrUplink)),
+		ConvertToString(uint64(aggregatedQoS.DnnMbrDownlink)),
+	)
+
+	// Convert to BSON
+	amDataBson := configmodels.ToBsonM(amData)
+	amDataBson["ueId"] = ueId
+	amDataBson["servingPlmnId"] = servingPlmn
+
+	logger.DbLog.Infof(
+		"Upserting AM Provisioned Data for ueId %s, servingPlmnId %s",
+		ueId,
+		servingPlmn,
+	)
+
+	_, err = dbadapter.CommonDBClient.RestfulAPIPost(
+		amDataColl,
+		filter,
+		amDataBson,
+	)
+	if err != nil {
+		logger.DbLog.Errorf("Failed to update AM provisioned data for IMSI %s: %v", imsi, err)
+		return err
+	}
+
+	logger.DbLog.Debugf("Successfully updated AM provisioned data for IMSI %s", imsi)
 	return nil
+}
+
+func normalizeSnssai(s models.Snssai) models.Snssai {
+	if s.Sd == nil || *s.Sd == "" {
+		defaultSd := "000000"
+		s.Sd = &defaultSd
+	}
+	return s
+}
+
+func uniqueSnssaiList(list []models.Snssai) []models.Snssai {
+	seen := make(map[string]bool)
+	var result []models.Snssai
+
+	for _, s := range list {
+		s = normalizeSnssai(s)
+		key := fmt.Sprintf("%d-%s", s.Sst, *s.Sd)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+func containsString(list []string, val string) bool {
+	for _, v := range list {
+		if v == val {
+			return true
+		}
+	}
+	return false
+}
+
+func containsSnssai(list []models.Snssai, target models.Snssai) bool {
+	target = normalizeSnssai(target)
+
+	for _, v := range list {
+		v = normalizeSnssai(v)
+
+		if v.Sst == target.Sst &&
+			v.Sd != nil &&
+			target.Sd != nil &&
+			*v.Sd == *target.Sd {
+			return true
+		}
+	}
+	return false
 }
 
 func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) error {
@@ -428,6 +558,54 @@ func updateSmProvisionedData(snssai *models.Snssai, dnnMap map[string][]configmo
 
 func buildSmProvisionedDataDocument(snssai *models.Snssai, dnnMap map[string][]configmodels.DeviceGroupsIpDomainExpandedUeDnnQos, mcc, mnc, imsi string) (map[string]interface{}, error) {
 	dnnConfigurations := make(map[string]interface{}, len(dnnMap))
+
+	filter := bson.M{
+		"ueId": "imsi-" + imsi,
+		"$or": []bson.M{
+			{"servingPlmnId": mcc + mnc},
+			{"servingPlmnId": ""},
+			{"servingPlmnId": bson.M{"$exists": false}},
+		},
+	}
+
+	existingRecord, err := dbadapter.CommonDBClient.RestfulAPIGetOne(smDataColl, filter)
+	if err != nil && err.Error() != "mongo: no documents in result" {
+		logger.DbLog.Warnf("Failed to fetch existing SM data for ueId %s: %v", imsi, err)
+		return nil, err
+	}
+
+	var smData models.SessionManagementSubscriptionData
+
+	if existingRecord == nil {
+		smData = models.SessionManagementSubscriptionData{}
+
+		cfg := make(map[string]models.DnnConfiguration)
+		smData.DnnConfigurations = &cfg
+	} else {
+		bsonBytes, err := bson.Marshal(existingRecord)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := bson.Unmarshal(bsonBytes, &smData); err != nil {
+			return nil, err
+		}
+
+		if smData.DnnConfigurations == nil {
+			cfg := make(map[string]models.DnnConfiguration)
+			smData.DnnConfigurations = &cfg
+		}
+
+		smData.SingleNssai = uniqueSnssaiList(smData.SingleNssai)
+
+		if snssai != nil {
+			nextSlice := normalizeSnssai(*snssai)
+
+			if !containsSnssai(smData.SingleNssai, nextSlice) {
+				smData.SingleNssai = append(smData.SingleNssai, nextSlice)
+			}
+		}
+	}
 
 	for dnn, ueDnnQosList := range dnnMap {
 		aggregatedQoS := aggregateQoS(ueDnnQosList)

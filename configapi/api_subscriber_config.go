@@ -109,9 +109,11 @@ func GetSampleJSON(c *gin.Context) {
 	nullableInt32 := openapi.NewNullableInt32(&val)
 	smDataData := []models.SessionManagementSubscriptionData{
 		{
-			SingleNssai: models.Snssai{
-				Sst: 1,
-				Sd:  openapi.PtrString("010203"),
+			SingleNssai: []models.Snssai{
+				{
+					Sst: 1,
+					Sd:  openapi.PtrString("010203"),
+				},
 			},
 			DnnConfigurations: &map[string]models.DnnConfiguration{
 				"internet": {
@@ -140,9 +142,11 @@ func GetSampleJSON(c *gin.Context) {
 			},
 		},
 		{
-			SingleNssai: models.Snssai{
-				Sst: 1,
-				Sd:  openapi.PtrString("112233"),
+			SingleNssai: []models.Snssai{
+				{
+					Sst: 1,
+					Sd:  openapi.PtrString("010203"),
+				},
 			},
 			DnnConfigurations: &map[string]models.DnnConfiguration{
 				"internet": {
