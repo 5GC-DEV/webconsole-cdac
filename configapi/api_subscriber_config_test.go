@@ -398,9 +398,11 @@ func TestGetSubscriberByID(t *testing.T) {
 							},
 						},
 						"odbPacketServices": nil,
-						"singleNssai": map[string]any{
-							"sd":  "010203",
-							"sst": 1,
+						"singleNssai": []any{
+							map[string]any{
+								"sd":  "010203",
+								"sst": 1,
+							},
 						},
 						"traceData": nil,
 					},
