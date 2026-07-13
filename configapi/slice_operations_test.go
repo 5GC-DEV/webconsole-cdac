@@ -575,7 +575,11 @@ func TestBuildSmProvisionedDataDocument(t *testing.T) {
 			},
 		},
 	}
-
+	originalDB := dbadapter.CommonDBClient
+	dbadapter.CommonDBClient = &MockCommonDBClientEmpty{}
+	defer func() {
+		dbadapter.CommonDBClient = originalDB
+	}()
 	doc, err := buildSmProvisionedDataDocument(snssai, dnnMap, "208", "93", "208930100007487")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
