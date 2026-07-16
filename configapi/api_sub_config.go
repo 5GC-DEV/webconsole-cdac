@@ -540,7 +540,7 @@ func PostSubscriberByID(c *gin.Context) {
 	logger.WebUILog.Infoln("Successfully Added Subscriber Data to ConfigChannel: ", ueId)
 }
 
-func PostUEByID(c *gin.Context) {
+/*func PostUEByID(c *gin.Context) {
 	setCorsHeader(c)
 
 	var subsOverrideData configmodels.SubsOverrideData
@@ -593,7 +593,7 @@ func PostUEByID(c *gin.Context) {
 	/*if subsOverrideData.PlmnID != "" {
 		servingPlmnId = subsOverrideData.PlmnID
 	}*/
-	if subsOverrideData.OPc != "" {
+	/*if subsOverrideData.OPc != "" {
 		authSubsData.Opc.OpcValue = subsOverrideData.OPc
 	}
 	if subsOverrideData.Key != "" {
@@ -613,7 +613,7 @@ func PostUEByID(c *gin.Context) {
 	}
 	configChannel <- &msg
 	logger.WebUILog.Infoln("Successfully Added Subscriber Data to ConfigChannel: ", ueId)
-}
+}*/
 
 // PutSubscriberByID godoc
 //
