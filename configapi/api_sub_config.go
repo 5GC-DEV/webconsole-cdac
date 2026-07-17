@@ -629,7 +629,7 @@ func PostSubscriberByID(c *gin.Context) {
 // @Failure      404  {object}  nil  "Subscriber not found"
 // @Failure      500  {object}  nil  "Error updating subscriber"
 // @Router       /api/subscriber/{imsi}  [put]
-func PutSubscriberByID(c *gin.Context) {
+/*func PutSubscriberByID(c *gin.Context) {
 	setCorsHeader(c)
 	logger.WebUILog.Infoln("Put One Subscriber Data")
 
@@ -646,6 +646,45 @@ func PutSubscriberByID(c *gin.Context) {
 		MsgMethod:   configmodels.Post_op,
 		AuthSubData: &subsData.AuthenticationSubscription,
 		Imsi:        ueId,
+	}
+	configChannel <- &msg
+	logger.WebUILog.Infoln("Put Subscriber Data complete")
+}*/
+
+func PutSubscriberByID(c *gin.Context) {
+	setCorsHeader(c)
+	logger.WebUILog.Infoln("Put One Subscriber Data")
+
+	var subsData configmodels.SubsData
+	if err := c.ShouldBindJSON(&subsData); err != nil {
+		logger.WebUILog.Errorln("Put Subscriber Data - ShouldBindJSON failed ", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ueId := c.Param("ueId")
+
+	// Check the subscriber exists before allowing an update
+	filter := bson.M{"ueId": ueId}
+	subscriber, err := dbadapter.CommonDBClient.RestfulAPIGetOne(amDataColl, filter)
+	if err != nil {
+		logger.DbLog.Errorf("failed querying subscriber existence for IMSI: %s; Error: %v", ueId, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to check subscriber: %s existence", ueId)})
+		return
+	} else if subscriber == nil {
+		logger.WebUILog.Errorf("subscriber %s does not exist", ueId)
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("subscriber %s not found", ueId)})
+		return
+	}
+
+	c.JSON(http.StatusNoContent, gin.H{})
+
+	msg := configmodels.ConfigMessage{
+		MsgType:     configmodels.Sub_data,
+		MsgMethod:   configmodels.Post_op,
+		AuthSubData: &subsData.AuthenticationSubscription,
+		Imsi:        ueId,
+		Msisdn:      subsData.MSISDN,
 	}
 	configChannel <- &msg
 	logger.WebUILog.Infoln("Put Subscriber Data complete")
