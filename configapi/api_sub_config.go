@@ -21,7 +21,6 @@ import (
 	"github.com/omec-project/webconsole/configmodels"
 	"github.com/omec-project/webconsole/dbadapter"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const (
@@ -325,14 +324,17 @@ func GetSubscribers(c *gin.Context) {
 			tmp.PlmnID = servingPlmnId.(string)
 		}
 
-		// Extract MSISDN from gpsis (format: "msisdn-<number>")
-		if gpsisRaw, gpsisExists := amData["gpsis"]; gpsisExists {
-			if gpsisList, ok := gpsisRaw.(primitive.A); ok {
-				for _, g := range gpsisList {
-					if gpsi, ok := g.(string); ok && strings.HasPrefix(gpsi, "msisdn-") {
-						tmp.Msisdn = strings.TrimPrefix(gpsi, "msisdn-")
-						break
-					}
+		// Decode amData into the real struct instead of hand-parsing map keys
+		var amSub models.AccessAndMobilitySubscriptionData
+		if bsonBytes, err := bson.Marshal(amData); err != nil {
+			logger.DbLog.Errorw("failed to marshal am data", "ueId", ueId, "error", err)
+		} else if err := bson.Unmarshal(bsonBytes, &amSub); err != nil {
+			logger.DbLog.Errorw("failed to unmarshal am data", "ueId", ueId, "error", err)
+		} else {
+			for _, gpsi := range amSub.Gpsis {
+				if strings.HasPrefix(gpsi, "msisdn-") {
+					tmp.Msisdn = gpsi
+					break
 				}
 			}
 		}
@@ -343,21 +345,21 @@ func GetSubscribers(c *gin.Context) {
 		if errAuth != nil {
 			logger.DbLog.Errorw("failed to retrieve auth data for subscriber", "ueId", ueId, "error", errAuth)
 		} else if authData != nil {
-			if authMethod, ok := authData["authenticationMethod"].(string); ok {
-				tmp.AuthenticationMethod = authMethod
-			}
-			if opc, ok := authData["opc"].(bson.M); ok {
-				if opcValue, ok := opc["opcValue"].(string); ok {
-					tmp.Opc = opcValue
+			var authSub models.AuthenticationSubscription
+			bsonBytes, err := bson.Marshal(authData)
+			if err != nil {
+				logger.DbLog.Errorw("failed to marshal auth data", "ueId", ueId, "error", err)
+			} else if err := bson.Unmarshal(bsonBytes, &authSub); err != nil {
+				logger.DbLog.Errorw("failed to unmarshal auth data", "ueId", ueId, "error", err)
+			} else {
+				tmp.AuthenticationMethod = string(authSub.AuthenticationMethod)
+				tmp.SequenceNumber = authSub.SequenceNumber
+				if authSub.Opc != nil {
+					tmp.Opc = authSub.Opc.OpcValue
 				}
-			}
-			if permanentKey, ok := authData["permanentKey"].(bson.M); ok {
-				if keyValue, ok := permanentKey["permanentKeyValue"].(string); ok {
-					tmp.Key = keyValue
+				if authSub.PermanentKey != nil {
+					tmp.Key = authSub.PermanentKey.PermanentKeyValue
 				}
-			}
-			if sequenceNumber, ok := authData["sequenceNumber"].(string); ok {
-				tmp.SequenceNumber = sequenceNumber
 			}
 		}
 
