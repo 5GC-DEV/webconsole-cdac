@@ -541,59 +541,59 @@ func PostSubscriberByID(c *gin.Context) {
 }
 
 /*func PostUEByID(c *gin.Context) {
-	setCorsHeader(c)
+setCorsHeader(c)
 
-	var subsOverrideData configmodels.SubsOverrideData
-	if err := c.ShouldBindJSON(&subsOverrideData); err != nil {
-		logger.WebUILog.Errorln("Post One Subscriber Data - ShouldBindJSON failed ", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+var subsOverrideData configmodels.SubsOverrideData
+if err := c.ShouldBindJSON(&subsOverrideData); err != nil {
+	logger.WebUILog.Errorln("Post One Subscriber Data - ShouldBindJSON failed ", err)
+	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	return
+}
 
-	ueId := c.Param("ueId")
+ueId := c.Param("ueId")
 
-	logger.WebUILog.Infoln("Received Post Subscriber Data from Roc/Simapp: ", ueId)
+logger.WebUILog.Infoln("Received Post Subscriber Data from Roc/Simapp: ", ueId)
 
-	// Check if the IMSI already exists in the database
-	filter := bson.M{"ueId": ueId}
-	subscriber, err := dbadapter.CommonDBClient.RestfulAPIGetOne(amDataColl, filter)
-	if err != nil {
-		logger.DbLog.Errorf("failed querying subscriber existence for IMSI: %s; Error: %v", ueId, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to check subscriber: %s existence", ueId)})
-		return
-	} else if subscriber != nil {
-		logger.WebUILog.Errorf("subscriber %s already exists", ueId)
-		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("subscriber %s already exists", ueId)})
-		return
-	}
-	authSubsData := models.AuthenticationSubscription{
-		AuthenticationManagementField: "8000",
-		AuthenticationMethod:          "5G_AKA", // "5G_AKA", "EAP_AKA_PRIME"
-		Milenage: &models.Milenage{
-			Op: &models.Op{
-				EncryptionAlgorithm: 0,
-				EncryptionKey:       0,
-				OpValue:             "", // Required
-			},
-		},
-		Opc: &models.Opc{
+// Check if the IMSI already exists in the database
+filter := bson.M{"ueId": ueId}
+subscriber, err := dbadapter.CommonDBClient.RestfulAPIGetOne(amDataColl, filter)
+if err != nil {
+	logger.DbLog.Errorf("failed querying subscriber existence for IMSI: %s; Error: %v", ueId, err)
+	c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to check subscriber: %s existence", ueId)})
+	return
+} else if subscriber != nil {
+	logger.WebUILog.Errorf("subscriber %s already exists", ueId)
+	c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("subscriber %s already exists", ueId)})
+	return
+}
+authSubsData := models.AuthenticationSubscription{
+	AuthenticationManagementField: "8000",
+	AuthenticationMethod:          "5G_AKA", // "5G_AKA", "EAP_AKA_PRIME"
+	Milenage: &models.Milenage{
+		Op: &models.Op{
 			EncryptionAlgorithm: 0,
 			EncryptionKey:       0,
-			// OpcValue:            "8e27b6af0e692e750f32667a3b14605d", // Required
+			OpValue:             "", // Required
 		},
-		PermanentKey: &models.PermanentKey{
-			EncryptionAlgorithm: 0,
-			EncryptionKey:       0,
-			// PermanentKeyValue:   "8baf473f2f8fd09487cccbd7097c6862", // Required
-		},
-		// SequenceNumber: "16f3b3f70fc2",
-	}
+	},
+	Opc: &models.Opc{
+		EncryptionAlgorithm: 0,
+		EncryptionKey:       0,
+		// OpcValue:            "8e27b6af0e692e750f32667a3b14605d", // Required
+	},
+	PermanentKey: &models.PermanentKey{
+		EncryptionAlgorithm: 0,
+		EncryptionKey:       0,
+		// PermanentKeyValue:   "8baf473f2f8fd09487cccbd7097c6862", // Required
+	},
+	// SequenceNumber: "16f3b3f70fc2",
+}
 
-	// override values
-	/*if subsOverrideData.PlmnID != "" {
-		servingPlmnId = subsOverrideData.PlmnID
-	}*/
-	/*if subsOverrideData.OPc != "" {
+// override values
+/*if subsOverrideData.PlmnID != "" {
+	servingPlmnId = subsOverrideData.PlmnID
+}*/
+/*if subsOverrideData.OPc != "" {
 		authSubsData.Opc.OpcValue = subsOverrideData.OPc
 	}
 	if subsOverrideData.Key != "" {
@@ -677,6 +677,15 @@ func PutSubscriberByID(c *gin.Context) {
 		return
 	}
 
+	// Extract MSISDN from Gpsis (format: "msisdn-<number>")
+	var msisdn string
+	for _, gpsi := range subsData.AccessAndMobilitySubscriptionData.Gpsis {
+		if strings.HasPrefix(gpsi, "msisdn-") {
+			msisdn = strings.TrimPrefix(gpsi, "msisdn-")
+			break
+		}
+	}
+
 	c.JSON(http.StatusNoContent, gin.H{})
 
 	msg := configmodels.ConfigMessage{
@@ -684,7 +693,7 @@ func PutSubscriberByID(c *gin.Context) {
 		MsgMethod:   configmodels.Post_op,
 		AuthSubData: &subsData.AuthenticationSubscription,
 		Imsi:        ueId,
-		Msisdn:      subsData.MSISDN,
+		Msisdn:      msisdn,
 	}
 	configChannel <- &msg
 	logger.WebUILog.Infoln("Put Subscriber Data complete")
