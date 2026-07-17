@@ -49,8 +49,13 @@ func (subscriberAuthData DatabaseSubscriberAuthenticationData) SubscriberAuthent
 		return
 	}
 	logger.WebUILog.Debugf("insert/update authentication subscription in amData collection: %v", imsi)
-	basicAmData := map[string]interface{}{
+	/*basicAmData := map[string]interface{}{
 		"ueId": imsi,
+	}*/
+	basicAmData := map[string]interface{}{
+		"ueId":          imsi,
+		"gpsis":         []string{"msisdn-xxxx"},
+		"servingPlmnId": "00101",
 	}
 	basicDataBson := configmodels.ToBsonM(basicAmData)
 	_, err = dbadapter.CommonDBClient.RestfulAPIPost(amDataColl, filter, basicDataBson)

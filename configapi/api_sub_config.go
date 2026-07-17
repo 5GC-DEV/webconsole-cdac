@@ -21,6 +21,7 @@ import (
 	"github.com/omec-project/webconsole/configmodels"
 	"github.com/omec-project/webconsole/dbadapter"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const (
@@ -274,7 +275,7 @@ func GetSampleJSON(c *gin.Context) {
 // @Failure      403  {object}  nil                      "Forbidden"
 // @Failure      500  {object}  nil                      "Error retrieving subscribers"
 // @Router      /api/subscriber/  [get]
-func GetSubscribers(c *gin.Context) {
+/*func GetSubscribers(c *gin.Context) {
 	setCorsHeader(c)
 
 	logger.WebUILog.Infoln("Get All Subscribers List")
@@ -293,6 +294,71 @@ func GetSubscribers(c *gin.Context) {
 
 		if servingPlmnId, plmnIdExists := amData["servingPlmnId"]; plmnIdExists {
 			tmp.PlmnID = servingPlmnId.(string)
+		}
+
+		subsList = append(subsList, tmp)
+	}
+
+	c.JSON(http.StatusOK, subsList)
+}*/
+
+func GetSubscribers(c *gin.Context) {
+	setCorsHeader(c)
+
+	logger.WebUILog.Infoln("Get All Subscribers List")
+
+	subsList := make([]configmodels.SubsListIE, 0)
+	amDataList, errGetMany := dbadapter.CommonDBClient.RestfulAPIGetMany(amDataColl, bson.M{})
+	if errGetMany != nil {
+		logger.DbLog.Errorw("failed to retrieve subscribers list", "error", errGetMany)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve subscribers list"})
+		return
+	}
+
+	for _, amData := range amDataList {
+		ueId := amData["ueId"].(string)
+		tmp := configmodels.SubsListIE{
+			UeId: ueId,
+		}
+
+		if servingPlmnId, plmnIdExists := amData["servingPlmnId"]; plmnIdExists {
+			tmp.PlmnID = servingPlmnId.(string)
+		}
+
+		// Extract MSISDN from gpsis (format: "msisdn-<number>")
+		if gpsisRaw, gpsisExists := amData["gpsis"]; gpsisExists {
+			if gpsisList, ok := gpsisRaw.(primitive.A); ok {
+				for _, g := range gpsisList {
+					if gpsi, ok := g.(string); ok && strings.HasPrefix(gpsi, "msisdn-") {
+						tmp.Msisdn = strings.TrimPrefix(gpsi, "msisdn-")
+						break
+					}
+				}
+			}
+		}
+
+		// Fetch authentication data for this subscriber
+		authFilter := bson.M{"ueId": ueId}
+		authData, errAuth := dbadapter.CommonDBClient.RestfulAPIGetOne(authSubsDataColl, authFilter)
+		if errAuth != nil {
+			logger.DbLog.Errorw("failed to retrieve auth data for subscriber", "ueId", ueId, "error", errAuth)
+		} else if authData != nil {
+			if authMethod, ok := authData["authenticationMethod"].(string); ok {
+				tmp.AuthenticationMethod = authMethod
+			}
+			if opc, ok := authData["opc"].(bson.M); ok {
+				if opcValue, ok := opc["opcValue"].(string); ok {
+					tmp.Opc = opcValue
+				}
+			}
+			if permanentKey, ok := authData["permanentKey"].(bson.M); ok {
+				if keyValue, ok := permanentKey["permanentKeyValue"].(string); ok {
+					tmp.Key = keyValue
+				}
+			}
+			if sequenceNumber, ok := authData["sequenceNumber"].(string); ok {
+				tmp.SequenceNumber = sequenceNumber
+			}
 		}
 
 		subsList = append(subsList, tmp)
