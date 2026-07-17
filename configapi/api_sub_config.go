@@ -341,7 +341,7 @@ func GetSubscribers(c *gin.Context) {
 
 		// Fetch authentication data for this subscriber
 		authFilter := bson.M{"ueId": ueId}
-		authData, errAuth := dbadapter.CommonDBClient.RestfulAPIGetOne(authSubsDataColl, authFilter)
+		authData, errAuth := dbadapter.AuthDBClient.RestfulAPIGetOne(authSubsDataColl, authFilter)
 		if errAuth != nil {
 			logger.DbLog.Errorw("failed to retrieve auth data for subscriber", "ueId", ueId, "error", errAuth)
 		} else if authData != nil {
