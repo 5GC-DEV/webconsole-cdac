@@ -16,7 +16,6 @@ import (
 
 	"github.com/5GC-DEV/openapi-cdac/models"
 	"github.com/gin-gonic/gin"
-	"github.com/mitchellh/mapstructure"
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/backend/webui_context"
 	"github.com/omec-project/webconsole/configmodels"
@@ -768,31 +767,38 @@ func PutSubscriberByID(c *gin.Context) {
 		} else if devGroupDoc == nil {
 			logger.WebUILog.Infof("no device group found containing IMSI %s; skipping msisdn sync", bareImsi)
 		} else {
-			var devGroup configmodels.DeviceGroups
-			if err := mapstructure.Decode(devGroupDoc, &devGroup); err != nil {
-				logger.DbLog.Errorf("failed decoding device group doc: %v", err)
+			docBytes, err := json.Marshal(devGroupDoc)
+			if err != nil {
+				logger.DbLog.Errorf("failed marshaling device group doc for IMSI %s: %v", bareImsi, err)
 			} else {
-				idx := -1
-				for i, imsi := range devGroup.Imsis {
-					if imsi == bareImsi {
-						idx = i
-						break
-					}
-				}
-				if idx >= 0 && idx < len(devGroup.Msisdns) {
-					devGroup.Msisdns[idx] = msisdn
-
-					updateFilter := bson.M{"group-name": devGroup.DeviceGroupName}
-					patchData := map[string]interface{}{
-						"msisdns": devGroup.Msisdns,
-					}
-					if err := dbadapter.CommonDBClient.RestfulAPIMergePatch(devGroupDataColl, updateFilter, patchData); err != nil {
-						logger.DbLog.Errorf("failed updating device group %s msisdn for IMSI %s: %v", devGroup.DeviceGroupName, bareImsi, err)
-					} else {
-						logger.WebUILog.Infof("updated msisdn for IMSI %s in device group %s at index %d", bareImsi, devGroup.DeviceGroupName, idx)
-					}
+				var devGroup configmodels.DeviceGroups
+				if err := json.Unmarshal(docBytes, &devGroup); err != nil {
+					logger.DbLog.Errorf("failed decoding device group doc: %v", err)
+				} else if devGroup.DeviceGroupName == "" {
+					logger.WebUILog.Errorf("decoded device group has empty group-name for IMSI %s", bareImsi)
 				} else {
-					logger.WebUILog.Warnf("IMSI %s not found in imsis/msisdns arrays for device group %s", bareImsi, devGroup.DeviceGroupName)
+					idx := -1
+					for i, imsi := range devGroup.Imsis {
+						if imsi == bareImsi {
+							idx = i
+							break
+						}
+					}
+					if idx >= 0 && idx < len(devGroup.Msisdns) {
+						devGroup.Msisdns[idx] = msisdn
+
+						updateFilter := bson.M{"group-name": devGroup.DeviceGroupName}
+						patchData := map[string]interface{}{
+							"msisdns": devGroup.Msisdns,
+						}
+						if err := dbadapter.CommonDBClient.RestfulAPIMergePatch(devGroupDataColl, updateFilter, patchData); err != nil {
+							logger.DbLog.Errorf("failed updating device group %s msisdn for IMSI %s: %v", devGroup.DeviceGroupName, bareImsi, err)
+						} else {
+							logger.WebUILog.Infof("updated msisdn for IMSI %s in device group %s at index %d", bareImsi, devGroup.DeviceGroupName, idx)
+						}
+					} else {
+						logger.WebUILog.Warnf("IMSI %s not found in imsis/msisdns arrays for device group %s", bareImsi, devGroup.DeviceGroupName)
+					}
 				}
 			}
 		}
