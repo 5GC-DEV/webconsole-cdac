@@ -757,6 +757,7 @@ func PutSubscriberByID(c *gin.Context) {
 
 	// Find the device group containing this IMSI and patch just its MSISDN slot
 	// Find the device group containing this IMSI and patch just its MSISDN slot
+	// Find the device group containing this IMSI and patch just its MSISDN slot
 	if msisdn != "" {
 		bareImsi := strings.TrimPrefix(ueId, "imsi-")
 
@@ -779,9 +780,11 @@ func PutSubscriberByID(c *gin.Context) {
 					}
 				}
 				if idx >= 0 && idx < len(devGroup.Msisdns) {
+					devGroup.Msisdns[idx] = msisdn
+
 					updateFilter := bson.M{"group-name": devGroup.DeviceGroupName}
 					patchData := map[string]interface{}{
-						fmt.Sprintf("msisdns.%d", idx): msisdn,
+						"msisdns": devGroup.Msisdns,
 					}
 					if err := dbadapter.CommonDBClient.RestfulAPIMergePatch(devGroupDataColl, updateFilter, patchData); err != nil {
 						logger.DbLog.Errorf("failed updating device group %s msisdn for IMSI %s: %v", devGroup.DeviceGroupName, bareImsi, err)
