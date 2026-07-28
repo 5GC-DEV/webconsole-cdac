@@ -16,6 +16,7 @@ import (
 
 	"github.com/5GC-DEV/openapi-cdac/models"
 	"github.com/gin-gonic/gin"
+	"github.com/mitchellh/mapstructure"
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/backend/webui_context"
 	"github.com/omec-project/webconsole/configmodels"
@@ -749,8 +750,45 @@ func PutSubscriberByID(c *gin.Context) {
 	var msisdn string
 	for _, gpsi := range subsData.AccessAndMobilitySubscriptionData.Gpsis {
 		if strings.HasPrefix(gpsi, "msisdn-") {
-			msisdn = strings.TrimPrefix(gpsi, "msisdn-")
+			msisdn = gpsi
 			break
+		}
+	}
+
+	// Find the device group containing this IMSI and patch just its MSISDN slot
+	if msisdn != "" {
+		devGroupFilter := bson.M{"imsis": ueId}
+		devGroupDoc, err := dbadapter.CommonDBClient.RestfulAPIGetOne(devGroupDataColl, devGroupFilter)
+		if err != nil {
+			logger.DbLog.Errorf("failed querying device group for IMSI: %s; Error: %v", ueId, err)
+		} else if devGroupDoc == nil {
+			logger.WebUILog.Infof("no device group found containing IMSI %s; skipping msisdn sync", ueId)
+		} else {
+			var devGroup configmodels.DeviceGroups
+			if err := mapstructure.Decode(devGroupDoc, &devGroup); err != nil {
+				logger.DbLog.Errorf("failed decoding device group doc: %v", err)
+			} else {
+				idx := -1
+				for i, imsi := range devGroup.Imsis {
+					if imsi == ueId {
+						idx = i
+						break
+					}
+				}
+				if idx >= 0 && idx < len(devGroup.Msisdns) {
+					updateFilter := bson.M{"group-name": devGroup.DeviceGroupName}
+					patchData := map[string]interface{}{
+						fmt.Sprintf("msisdns.%d", idx): msisdn,
+					}
+					if err := dbadapter.CommonDBClient.RestfulAPIMergePatch(devGroupDataColl, updateFilter, patchData); err != nil {
+						logger.DbLog.Errorf("failed updating device group %s msisdn for IMSI %s: %v", devGroup.DeviceGroupName, ueId, err)
+					} else {
+						logger.WebUILog.Infof("updated msisdn for IMSI %s in device group %s at index %d", ueId, devGroup.DeviceGroupName, idx)
+					}
+				} else {
+					logger.WebUILog.Warnf("IMSI %s not found in imsis/msisdns arrays for device group %s", ueId, devGroup.DeviceGroupName)
+				}
+			}
 		}
 	}
 
