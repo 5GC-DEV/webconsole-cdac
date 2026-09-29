@@ -52,11 +52,6 @@ func (subscriberAuthData DatabaseSubscriberAuthenticationData) SubscriberAuthent
 	basicAmData := map[string]interface{}{
 		"ueId": imsi,
 	}
-	/*basicAmData := map[string]interface{}{
-		"ueId":          imsi,
-		"gpsis":         []string{"msisdn-xxxx"},
-		"servingPlmnId": "00101",
-	}*/
 	basicDataBson := configmodels.ToBsonM(basicAmData)
 	_, err = dbadapter.CommonDBClient.RestfulAPIPost(amDataColl, filter, basicDataBson)
 	if err != nil {
