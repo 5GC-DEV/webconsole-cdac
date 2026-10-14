@@ -56,13 +56,6 @@ var apiRoutes = Routes{
 		PostSubscriberByID,
 	},
 
-	/*{
-		"PostUEByID",
-		http.MethodPost,
-		"/imsi/:ueId",
-		PostUEByID,
-	},*/
-
 	{
 		"PutSubscriberByID",
 		http.MethodPut,

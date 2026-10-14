@@ -29,6 +29,10 @@ type MockMongoClientManySubscribers struct {
 	dbadapter.DBInterface
 }
 
+type MockMongoClientAuthByUe struct {
+	dbadapter.DBInterface
+}
+
 type MockMongoClientDeviceGroupsWithSubscriber struct {
 	dbadapter.DBInterface
 }
@@ -77,6 +81,23 @@ func (m *MockMongoClientDeviceGroupsWithSubscriber) RestfulAPIGetMany(coll strin
 	}
 	results = append(results, dg)
 	return results, nil
+}
+
+func (m *MockMongoClientAuthByUe) RestfulAPIGetOne(coll string, filter bson.M) (map[string]interface{}, error) {
+	switch filter["ueId"] {
+	case "208930100007487":
+		return map[string]interface{}{
+			"authenticationMethod": "5G_AKA",
+			"sequenceNumber":       "000000000001",
+			// plus key/opc in whatever shape the handler reads
+		}, nil
+	case "208930100007488":
+		return map[string]interface{}{
+			"authenticationMethod": "EAP_AKA_PRIME",
+			"sequenceNumber":       "000000000002",
+		}, nil
+	}
+	return nil, nil
 }
 
 type MockAuthDBClientEmpty struct {
@@ -531,15 +552,16 @@ func TestGetSubscriberByID(t *testing.T) {
 	}
 }
 
-/*func TestSubscriberGetHandlers(t *testing.T) {
+func TestSubscriberGetHandlers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router := gin.Default()
+	router := gin.New()
 	AddApiService(router)
 
 	testCases := []struct {
 		name         string
 		route        string
 		dbAdapter    dbadapter.DBInterface
+		authAdapter  dbadapter.DBInterface
 		expectedCode int
 		expectedBody string
 	}{
@@ -547,6 +569,7 @@ func TestGetSubscriberByID(t *testing.T) {
 			name:         "SubscriberEmptyDB",
 			route:        "/api/subscriber",
 			dbAdapter:    &MockMongoClientEmptyDB{},
+			authAdapter:  &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusOK,
 			expectedBody: "[]",
 		},
@@ -554,33 +577,47 @@ func TestGetSubscriberByID(t *testing.T) {
 			name:         "Get subscribers list with one element",
 			route:        "/api/subscriber",
 			dbAdapter:    &MockMongoClientOneSubscriber{},
+			authAdapter:  &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusOK,
-			expectedBody: `[{"plmnID":"12345","ueId":"208930100007487"}]`,
+			expectedBody: `[{"plmnID":"12345","ueId":"208930100007487","msisdn":"","opc":"","key":"","authenticationMethod":"","sequenceNumber":""}]`,
 		},
 		{
 			name:         "ManySubscribers",
 			route:        "/api/subscriber",
 			dbAdapter:    &MockMongoClientManySubscribers{},
+			authAdapter:  &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusOK,
 			expectedBody: `[{"plmnID":"12345","ueId":"208930100007487","msisdn":"","opc":"","key":"","authenticationMethod":"","sequenceNumber":""},{"plmnID":"54321","ueId":"208930100007488","msisdn":"","opc":"","key":"","authenticationMethod":"","sequenceNumber":""}]`,
+		},
+		{
+			name:         "ManySubscribers with distinct auth data",
+			route:        "/api/subscriber",
+			dbAdapter:    &MockMongoClientManySubscribers{},
+			authAdapter:  &MockMongoClientAuthByUe{},
+			expectedCode: http.StatusOK,
+			expectedBody: `[{"plmnID":"12345","ueId":"208930100007487","msisdn":"","opc":"","key":"","authenticationMethod":"5G_AKA","sequenceNumber":"000000000001"},{"plmnID":"54321","ueId":"208930100007488","msisdn":"","opc":"","key":"","authenticationMethod":"EAP_AKA_PRIME","sequenceNumber":"000000000002"}]`,
 		},
 		{
 			name:         "SubscriberDBError",
 			route:        "/api/subscriber",
 			dbAdapter:    &MockMongoClientDBError{},
+			authAdapter:  &MockMongoClientEmptyDB{},
 			expectedCode: http.StatusInternalServerError,
 			expectedBody: `{"error":"failed to retrieve subscribers list"}`,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			origDBClient := dbadapter.CommonDBClient
+			origCommon := dbadapter.CommonDBClient
+			origAuth := dbadapter.AuthDBClient
 			dbadapter.CommonDBClient = tc.dbAdapter
-			defer func() { dbadapter.CommonDBClient = origDBClient }()
-			req, err := http.NewRequest(http.MethodGet, tc.route, nil)
-			if err != nil {
-				t.Fatalf("failed to create request: %v", err)
-			}
+			dbadapter.AuthDBClient = tc.authAdapter
+			t.Cleanup(func() {
+				dbadapter.CommonDBClient = origCommon
+				dbadapter.AuthDBClient = origAuth
+			})
+
+			req := httptest.NewRequest(http.MethodGet, tc.route, nil)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)
@@ -593,7 +630,7 @@ func TestGetSubscriberByID(t *testing.T) {
 			}
 		})
 	}
-}*/
+}
 
 func TestSubscriberPostHandlersNoExistingSubscriber(t *testing.T) {
 	gin.SetMode(gin.TestMode)

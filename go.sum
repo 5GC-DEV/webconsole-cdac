@@ -2,8 +2,9 @@ github.com/5GC-DEV/config5g-cdac v1.4.2-0.20250430103952-0383bf5b24b8 h1:mhgUeuj
 github.com/5GC-DEV/config5g-cdac v1.4.2-0.20250430103952-0383bf5b24b8/go.mod h1:lgBpYjPX/MKbjfjy9pvo2ErNCA+2EYDoKEIszJO93E0=
 github.com/5GC-DEV/openapi-cdac v0.4.1 h1:EFGYKz6D+k2tI4fEvSDAJseVo3amgoZEK3tVrp5znec=
 github.com/5GC-DEV/openapi-cdac v0.4.1/go.mod h1:KLX5UeLe67E9SQC/vVNArCa4KK4luoDNAS0kRGkdE74=
+github.com/5GC-DEV/openapi-cdac v0.4.3 h1:aHHJpuwVe+8k3faUxp0LKEia7e6Cv8oYLS5AqtBb6Xg=
+github.com/5GC-DEV/openapi-cdac v0.4.3/go.mod h1:C9NUfKZO1bMwFxB/ZSKqSS6g0B3gBA+n1B1N2YZoCh0=
 github.com/5GC-DEV/openapi-cdac v1.0.0/go.mod h1:TFxV/NlwA7waEk3BqH6baTQ8oWpPMRDFC1YCEpPjl04=
-github.com/BurntSushi/toml v1.4.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3dyBCFEj5IhUbnKptjxatkF07cF2ak3yi77so=
@@ -104,8 +105,6 @@ github.com/montanaflynn/stats v0.7.1/go.mod h1:etXPPgVO6n31NxCd9KQUMvCM+ve0ruNzt
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/nbio/st v0.0.0-20140626010706-e9e8d9816f32/go.mod h1:9wM+0iRr9ahx58uYLpLIr5fm8diHn0JbqRycJi6w0Ms=
-github.com/omec-project/config5g v1.6.2 h1:bfLxwVSt6LAWCQtBmjUuks5CO3qambvcy3VjSVAMHdk=
-github.com/omec-project/config5g v1.6.2/go.mod h1:LuaRiJTCJXCkQF7nKB5fOcz6oVMF/8oid+EKCYFAy0E=
 github.com/omec-project/util v1.3.2 h1:5JP4ZYqMPPESSYrgc6LQNlcvJ/Xhrq8u5jSV405iuX8=
 github.com/omec-project/util v1.3.2/go.mod h1:Q5hNzZ0VSIbYzi+FRaJrvVD12BxK0n5uoNvvV3qn+ro=
 github.com/pelletier/go-toml/v2 v2.2.4 h1:mye9XuhQ6gvn5h28+VilKrrPoQVanw5PMw/TB0t5Ec4=

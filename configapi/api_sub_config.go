@@ -274,33 +274,6 @@ func GetSampleJSON(c *gin.Context) {
 // @Failure      403  {object}  nil                      "Forbidden"
 // @Failure      500  {object}  nil                      "Error retrieving subscribers"
 // @Router      /api/subscriber/  [get]
-/*func GetSubscribers(c *gin.Context) {
-	setCorsHeader(c)
-
-	logger.WebUILog.Infoln("Get All Subscribers List")
-
-	subsList := make([]configmodels.SubsListIE, 0)
-	amDataList, errGetMany := dbadapter.CommonDBClient.RestfulAPIGetMany(amDataColl, bson.M{})
-	if errGetMany != nil {
-		logger.DbLog.Errorw("failed to retrieve subscribers list", "error", errGetMany)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve subscribers list"})
-		return
-	}
-	for _, amData := range amDataList {
-		tmp := configmodels.SubsListIE{
-			UeId: amData["ueId"].(string),
-		}
-
-		if servingPlmnId, plmnIdExists := amData["servingPlmnId"]; plmnIdExists {
-			tmp.PlmnID = servingPlmnId.(string)
-		}
-
-		subsList = append(subsList, tmp)
-	}
-
-	c.JSON(http.StatusOK, subsList)
-}*/
-
 func GetSubscribers(c *gin.Context) {
 	setCorsHeader(c)
 
