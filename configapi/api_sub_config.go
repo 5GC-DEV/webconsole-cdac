@@ -286,13 +286,54 @@ func GetSubscribers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve subscribers list"})
 		return
 	}
+
 	for _, amData := range amDataList {
+		ueId := amData["ueId"].(string)
 		tmp := configmodels.SubsListIE{
-			UeId: amData["ueId"].(string),
+			UeId: ueId,
 		}
 
 		if servingPlmnId, plmnIdExists := amData["servingPlmnId"]; plmnIdExists {
 			tmp.PlmnID = servingPlmnId.(string)
+		}
+
+		// Decode amData into the real struct instead of hand-parsing map keys
+		var amSub models.AccessAndMobilitySubscriptionData
+		if bsonBytes, err := bson.Marshal(amData); err != nil {
+			logger.DbLog.Errorw("failed to marshal am data", "ueId", ueId, "error", err)
+		} else if err := bson.Unmarshal(bsonBytes, &amSub); err != nil {
+			logger.DbLog.Errorw("failed to unmarshal am data", "ueId", ueId, "error", err)
+		} else {
+			for _, gpsi := range amSub.Gpsis {
+				if strings.HasPrefix(gpsi, "msisdn-") {
+					tmp.Msisdn = gpsi
+					break
+				}
+			}
+		}
+
+		// Fetch authentication data for this subscriber
+		authFilter := bson.M{"ueId": ueId}
+		authData, errAuth := dbadapter.AuthDBClient.RestfulAPIGetOne(authSubsDataColl, authFilter)
+		if errAuth != nil {
+			logger.DbLog.Errorw("failed to retrieve auth data for subscriber", "ueId", ueId, "error", errAuth)
+		} else if authData != nil {
+			var authSub models.AuthenticationSubscription
+			bsonBytes, err := bson.Marshal(authData)
+			if err != nil {
+				logger.DbLog.Errorw("failed to marshal auth data", "ueId", ueId, "error", err)
+			} else if err := bson.Unmarshal(bsonBytes, &authSub); err != nil {
+				logger.DbLog.Errorw("failed to unmarshal auth data", "ueId", ueId, "error", err)
+			} else {
+				tmp.AuthenticationMethod = string(authSub.AuthenticationMethod)
+				tmp.SequenceNumber = authSub.SequenceNumber
+				if authSub.Opc != nil {
+					tmp.Opc = authSub.Opc.OpcValue
+				}
+				if authSub.PermanentKey != nil {
+					tmp.Key = authSub.PermanentKey.PermanentKeyValue
+				}
+			}
 		}
 
 		subsList = append(subsList, tmp)
@@ -534,6 +575,7 @@ func PostSubscriberByID(c *gin.Context) {
 		MsgMethod:   configmodels.Post_op,
 		AuthSubData: &authSubsData,
 		Imsi:        ueId,
+		Msisdn:      subsOverrideData.MSISDN,
 	}
 	configChannel <- &msg
 	logger.WebUILog.Infoln("Successfully Added Subscriber Data to ConfigChannel: ", ueId)
@@ -553,16 +595,90 @@ func PostSubscriberByID(c *gin.Context) {
 // @Failure      404  {object}  nil  "Subscriber not found"
 // @Failure      500  {object}  nil  "Error updating subscriber"
 // @Router       /api/subscriber/{imsi}  [put]
+
 func PutSubscriberByID(c *gin.Context) {
 	setCorsHeader(c)
 	logger.WebUILog.Infoln("Put One Subscriber Data")
 
 	var subsData configmodels.SubsData
 	if err := c.ShouldBindJSON(&subsData); err != nil {
-		logger.WebUILog.Panic(err.Error())
+		logger.WebUILog.Errorln("Put Subscriber Data - ShouldBindJSON failed ", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	ueId := c.Param("ueId")
+
+	// Check the subscriber exists before allowing an update
+	filter := bson.M{"ueId": ueId}
+	subscriber, err := dbadapter.CommonDBClient.RestfulAPIGetOne(amDataColl, filter)
+	if err != nil {
+		logger.DbLog.Errorf("failed querying subscriber existence for IMSI: %s; Error: %v", ueId, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to check subscriber: %s existence", ueId)})
+		return
+	} else if subscriber == nil {
+		logger.WebUILog.Errorf("subscriber %s does not exist", ueId)
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("subscriber %s not found", ueId)})
+		return
+	}
+
+	// Extract MSISDN from Gpsis (format: "msisdn-<number>")
+	var msisdn string
+	for _, gpsi := range subsData.AccessAndMobilitySubscriptionData.Gpsis {
+		if strings.HasPrefix(gpsi, "msisdn-") {
+			msisdn = gpsi
+			break
+		}
+	}
+
+	// Find the device group containing this IMSI and patch just its MSISDN slot
+	if msisdn != "" {
+		bareImsi := strings.TrimPrefix(ueId, "imsi-")
+
+		devGroupFilter := bson.M{"imsis": bareImsi}
+		devGroupDoc, err := dbadapter.CommonDBClient.RestfulAPIGetOne(devGroupDataColl, devGroupFilter)
+		if err != nil {
+			logger.DbLog.Errorf("failed querying device group for IMSI: %s; Error: %v", bareImsi, err)
+		} else if devGroupDoc == nil {
+			logger.WebUILog.Infof("no device group found containing IMSI %s; skipping msisdn sync", bareImsi)
+		} else {
+			docBytes, err := json.Marshal(devGroupDoc)
+			if err != nil {
+				logger.DbLog.Errorf("failed marshaling device group doc for IMSI %s: %v", bareImsi, err)
+			} else {
+				var devGroup configmodels.DeviceGroups
+				if err := json.Unmarshal(docBytes, &devGroup); err != nil {
+					logger.DbLog.Errorf("failed decoding device group doc: %v", err)
+				} else if devGroup.DeviceGroupName == "" {
+					logger.WebUILog.Errorf("decoded device group has empty group-name for IMSI %s", bareImsi)
+				} else {
+					idx := -1
+					for i, imsi := range devGroup.Imsis {
+						if imsi == bareImsi {
+							idx = i
+							break
+						}
+					}
+					if idx >= 0 && idx < len(devGroup.Msisdns) {
+						devGroup.Msisdns[idx] = msisdn
+
+						updateFilter := bson.M{"group-name": devGroup.DeviceGroupName}
+						patchData := map[string]interface{}{
+							"msisdns": devGroup.Msisdns,
+						}
+						if err := dbadapter.CommonDBClient.RestfulAPIMergePatch(devGroupDataColl, updateFilter, patchData); err != nil {
+							logger.DbLog.Errorf("failed updating device group %s msisdn for IMSI %s: %v", devGroup.DeviceGroupName, bareImsi, err)
+						} else {
+							logger.WebUILog.Infof("updated msisdn for IMSI %s in device group %s at index %d", bareImsi, devGroup.DeviceGroupName, idx)
+						}
+					} else {
+						logger.WebUILog.Warnf("IMSI %s not found in imsis/msisdns arrays for device group %s", bareImsi, devGroup.DeviceGroupName)
+					}
+				}
+			}
+		}
+	}
+
 	c.JSON(http.StatusNoContent, gin.H{})
 
 	msg := configmodels.ConfigMessage{
@@ -570,6 +686,7 @@ func PutSubscriberByID(c *gin.Context) {
 		MsgMethod:   configmodels.Post_op,
 		AuthSubData: &subsData.AuthenticationSubscription,
 		Imsi:        ueId,
+		Msisdn:      msisdn,
 	}
 	configChannel <- &msg
 	logger.WebUILog.Infoln("Put Subscriber Data complete")

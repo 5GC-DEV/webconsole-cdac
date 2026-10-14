@@ -6,6 +6,11 @@
 package configmodels
 
 type SubsListIE struct {
-	PlmnID string `json:"plmnID"`
-	UeId   string `json:"ueId"`
+	PlmnID               string `json:"plmnID"`
+	UeId                 string `json:"ueId"`
+	Msisdn               string `json:"msisdn"`
+	Opc                  string `json:"opc"`
+	Key                  string `json:"key"`
+	AuthenticationMethod string `json:"authenticationMethod"`
+	SequenceNumber       string `json:"sequenceNumber"`
 }

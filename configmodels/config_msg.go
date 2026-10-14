@@ -30,6 +30,7 @@ type ConfigMessage struct {
 	Imsi         string
 	MsgType      int
 	MsgMethod    int
+	Msisdn       string
 }
 
 // Slice + attached device group
