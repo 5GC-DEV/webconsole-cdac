@@ -40,7 +40,7 @@ func TestStatus(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dbadapter.WebuiDBClient = tc.dbAdapter
-			req, err := http.NewRequest(http.MethodGet, "/status", nil)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/status", nil)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -49,10 +49,10 @@ func TestStatus(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
 			if w.Body.String() != tc.expectedBody {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+				t.Errorf("expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
 			}
 		})
 	}

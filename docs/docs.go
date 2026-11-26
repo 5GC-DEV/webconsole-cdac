@@ -616,6 +616,9 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Device Group Deletion Failed"
                     }
                 }
             }
@@ -691,6 +694,9 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden"
+                    },
+                    "409": {
+                        "description": "Resource Conflict"
                     },
                     "500": {
                         "description": "Error creating gNB"
@@ -862,6 +868,9 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden"
+                    },
+                    "409": {
+                        "description": "Resource Conflict"
                     },
                     "500": {
                         "description": "Error creating UPF"
@@ -1248,11 +1257,20 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "ip-domain-expanded": {
-                    "$ref": "#/definitions/configmodels.DeviceGroupsIpDomainExpanded"
-                },
                 "ip-domain-name": {
                     "type": "string"
+                },
+                "ip-domains": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configmodels.DeviceGroupsIpDomainExpanded"
+                    }
+                },
+                "msisdns": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "site-info": {
                     "type": "string"
@@ -1273,6 +1291,9 @@ const docTemplate = `{
                 },
                 "mtu": {
                     "type": "integer"
+                },
+                "pcscf-primary": {
+                    "type": "string"
                 },
                 "ue-dnn-qos": {
                     "$ref": "#/definitions/configmodels.DeviceGroupsIpDomainExpandedUeDnnQos"
@@ -1399,6 +1420,14 @@ const docTemplate = `{
                 "action": {
                     "description": "action",
                     "type": "string"
+                },
+                "app-gbr-downlink": {
+                    "description": "guaranteed bit rate for downlink, in the unit given by bitrate-unit",
+                    "type": "integer"
+                },
+                "app-gbr-uplink": {
+                    "description": "guaranteed bit rate for uplink, in the unit given by bitrate-unit",
+                    "type": "integer"
                 },
                 "app-mbr-downlink": {
                     "type": "integer"

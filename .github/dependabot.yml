@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2023 Canonical Ltd.
-# Copyright 2024 Intel Corporation
-
+# Copyright 2024-present Intel Corporation
+# Timeline for each ecosystem is intentionally staggered to spread
+# Dependabot PRs over the week.
 version: 2
 updates:
-
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -12,11 +12,25 @@ updates:
       day: "sunday"
       time: "21:00"
       timezone: "America/Los_Angeles"
-
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "sunday"
+      day: "thursday"
       time: "21:00"
       timezone: "America/Los_Angeles"
+    groups:
+      omec-project:
+        patterns:
+          - "github.com/omec-project/*"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "21:00"
+      timezone: "America/Los_Angeles"
+    groups:
+      actions-deps:
+        patterns:
+          - "*"

@@ -10,20 +10,24 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/omec-project/webconsole/backend/factory"
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/backend/nfconfig"
 	"github.com/omec-project/webconsole/backend/webui_service"
+	"github.com/omec-project/webconsole/configapi"
 	"github.com/omec-project/webconsole/dbadapter"
 	"github.com/urfave/cli/v3"
 )
 
 var (
-	initMongoDB       = dbadapter.InitMongoDB
-	newNFConfigServer = nfconfig.NewNFConfigServer
-	runServer         = runWebUIAndNFConfig
+	initMongoDB             = dbadapter.InitMongoDB
+	ensureSubscriberIndexes = configapi.EnsureSubscriberIndexes
+	newNFConfigServer       = nfconfig.NewNFConfigServer
+	runServer               = runWebUIAndNFConfig
 )
 
 func main() {
@@ -72,26 +76,40 @@ func startApplication(config *factory.Config) error {
 		logger.InitLog.Errorf("failed to initialize MongoDB: %v", err)
 		return err
 	}
+	if err := ensureSubscriberIndexes(); err != nil {
+		logger.InitLog.Errorf("failed to ensure subscriber indexes: %v", err)
+		return err
+	}
 	webui := &webui_service.WEBUI{}
 	nfConfigServer, err := newNFConfigServer(config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize NFConfig: %w", err)
 	}
+
 	return runServer(webui, nfConfigServer)
 }
 
 func runWebUIAndNFConfig(webui webui_service.WebUIInterface, nfConf nfconfig.NFConfigInterface) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go webui.Start(ctx)
+	// SIGTERM (a pod delete or a rollout) and Ctrl-C cancel the context, which
+	// shuts both servers down; the process then exits 0.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	syncChan := make(chan struct{}, 1)
+	webuiDone := make(chan struct{})
+	go func() {
+		defer close(webuiDone)
+		webui.Start(ctx, syncChan)
+	}()
 	logger.InitLog.Infoln("WebUI started")
 
-	err := nfConf.Start(ctx)
+	err := nfConf.Start(ctx, syncChan)
+	// Stop the WebUI as well when NFConfig returns for any other reason, and
+	// wait for its server to shut down.
+	stop()
+	<-webuiDone
 	if err != nil {
-		cancel()
 		return fmt.Errorf("NFConfig failed: %w", err)
 	}
-
+	logger.InitLog.Infoln("WebUI and NFConfig stopped")
 	return nil
 }

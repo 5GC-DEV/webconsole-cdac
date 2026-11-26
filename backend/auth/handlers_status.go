@@ -10,7 +10,7 @@ import (
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/configmodels"
 	"github.com/omec-project/webconsole/dbadapter"
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type StatusResponse struct {
@@ -30,7 +30,7 @@ func GetStatus() gin.HandlerFunc {
 		numOfUserAccounts, err := dbadapter.WebuiDBClient.RestfulAPICount(configmodels.UserAccountDataColl, bson.M{})
 		if err != nil {
 			logger.AuthLog.Errorln(err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "couldn't generate status"})
+			c.JSON(http.StatusInternalServerError, gin.H{errorKey: "couldn't generate status"})
 		}
 		statusResponse := StatusResponse{
 			Initialized: numOfUserAccounts > 0,

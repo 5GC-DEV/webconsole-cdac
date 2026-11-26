@@ -1,42 +1,43 @@
 # SPDX-FileCopyrightText: 2021 Open Networking Foundation <info@opennetworking.org>
-# SPDX-FileCopyrightText: 2024 Intel Corporation
+# SPDX-FileCopyrightText: 2024-present Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
-FROM golang:1.24.4-bookworm AS builder
-
-RUN apt-get update && \
-    apt-get -y install --no-install-recommends \
-    apt-transport-https \
-    ca-certificates \
-    gcc \
-    cmake \
-    autoconf \
-    libtool \
-    pkg-config \
-    libmnl-dev \
-    libyaml-dev \
-    unzip && \
-    apt-get clean
+FROM golang:1.27.1-bookworm@sha256:69a7b9788769bec032d238959b61854e9ae87f57be9029ec04e9885fabf99195 AS builder
 
 WORKDIR $GOPATH/src/webconsole
 COPY . .
+ARG MAKEFLAGS
 RUN make all && \
     CGO_ENABLED=0 go build -a -installsuffix nocgo -o webconsole -x server.go
 
-FROM alpine:3.22 AS webui
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS webui
 
-LABEL maintainer="Aether SD-Core <dev@lists.aetherproject.org>" \
-    description="ONF open source 5G Core Network" \
-    version="Stage 3"
+
+# Build arguments for dynamic labels
+ARG VERSION=dev
+ARG VCS_URL=unknown
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.source="${VCS_URL}" \
+    org.opencontainers.image.version="${VERSION}" \
+    org.opencontainers.image.created="${BUILD_DATE}" \
+    org.opencontainers.image.revision="${VCS_REF}" \
+    org.opencontainers.image.url="${VCS_URL}" \
+    org.opencontainers.image.title="webconsole" \
+    org.opencontainers.image.description="Aether 5G Core WEBCONSOLE Network Function" \
+    org.opencontainers.image.authors="Aether SD-Core <dev@lists.aetherproject.org>" \
+    org.opencontainers.image.vendor="Aether Project" \
+    org.opencontainers.image.licenses="Apache-2.0" \
+    org.opencontainers.image.documentation="https://docs.sd-core.aetherproject.org/"
 
 ARG DEBUG_TOOLS
 
-# Install debug tools ~85MB (if DEBUG_TOOLS is set to true)
 RUN if [ "$DEBUG_TOOLS" = "true" ]; then \
-        apk update && apk add --no-cache -U vim strace net-tools curl netcat-openbsd bind-tools; \
-        fi
+        apk add --no-cache vim nano strace net-tools curl netcat-openbsd bind-tools; \
+    fi
 
 # Copy executable
 COPY --from=builder /go/src/webconsole/webconsole /usr/local/bin/.

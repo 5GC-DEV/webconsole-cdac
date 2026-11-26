@@ -5,120 +5,297 @@ package configapi
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/configmodels"
 	"github.com/omec-project/webconsole/dbadapter"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-type MockMongoClientOneGnb struct {
-	dbadapter.DBInterface
-}
+const (
+	gnbByNamePath = "/config/v1/inventory/gnb/gnb1"
+	upfByFQDNPath = "/config/v1/inventory/upf/upf1.my-domain.com"
+	upfByNamePath = "/config/v1/inventory/upf/upf1"
 
-func (m *MockMongoClientOneGnb) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
-	var results []map[string]interface{}
-	var tac int32 = 123
-	gnb := configmodels.ToBsonM(configmodels.Gnb{
-		Name: "gnb1",
+	gnbCreateBody   = `{"name": "gnb1", "tac": 123}`
+	gnbTacOnlyBody  = `{"tac": 123}`
+	upfCreateBody   = `{"hostname": "upf1.my-domain.com", "port": "123"}`
+	upfPortOnlyBody = `{"port": "123"}`
+)
+
+func gnb(name string, tac int32) configmodels.Gnb {
+	return configmodels.Gnb{
+		Name: name,
 		Tac:  &tac,
-	})
-	if gnb == nil {
-		panic("failed to convert gNB to BsonM")
 	}
-	results = append(results, gnb)
-	return results, nil
 }
 
-type MockMongoClientManyGnbs struct {
+type GnbMockDBClient struct {
 	dbadapter.DBInterface
+	gnbs []configmodels.Gnb
+	err  error
 }
 
-func (m *MockMongoClientManyGnbs) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
-	var results []map[string]interface{}
-	names := []string{"gnb0", "gnb1", "gnb2"}
-	tacs := []int32{12, 345, 678}
-	for i, name := range names {
-		gnb := configmodels.ToBsonM(configmodels.Gnb{
-			Name: name,
-			Tac:  &tacs[i],
-		})
+func (db *GnbMockDBClient) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]any, error) {
+	if coll == sliceDataColl {
+		return nil, nil
+	}
+	if db.err != nil {
+		return nil, db.err
+	}
+	var results []map[string]any
+	for _, g := range db.gnbs {
+		gnb := configmodels.ToBsonM(g)
 		if gnb == nil {
-			panic("failed to convert gNB to BsonM")
+			logger.DbLog.Fatalln("failed to convert gnbs to BsonM")
 		}
 		results = append(results, gnb)
 	}
-	return results, nil
+	return results, db.err
 }
 
-type MockMongoClientOneUpf struct {
-	dbadapter.DBInterface
-}
-
-func (m *MockMongoClientOneUpf) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
-	var results []map[string]interface{}
-	upf := configmodels.ToBsonM(configmodels.Upf{
-		Hostname: "upf1",
-		Port:     "123",
-	})
-	if upf == nil {
-		panic("failed to convert UPF to BsonM")
+func (db *GnbMockDBClient) RestfulAPIPutOneWithContext(context context.Context, collName string, filter bson.M, putData map[string]any) (bool, error) {
+	if db.err != nil {
+		return false, db.err
 	}
-	results = append(results, upf)
-	return results, nil
-}
-
-func (m *MockMongoClientOneUpf) StartSession() (mongo.Session, error) {
-	return &MockSession{}, nil
-}
-
-type MockMongoClientManyUpfs struct {
-	dbadapter.DBInterface
-}
-
-func (m *MockMongoClientManyUpfs) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]interface{}, error) {
-	var results []map[string]interface{}
-	names := []string{"upf0", "upf1", "upf2"}
-	ports := []string{"12", "345", "678"}
-	for i, name := range names {
-		upf := configmodels.ToBsonM(configmodels.Upf{
-			Hostname: name,
-			Port:     ports[i],
-		})
-		if upf == nil {
-			panic("failed to convert UPF to BsonM")
-		}
-		results = append(results, upf)
+	if len(db.gnbs) == 0 {
+		return false, nil
 	}
-	return results, nil
+	return true, nil // Return true if data exists
 }
 
-type MockMongoClientPutExistingUpf struct {
-	dbadapter.DBInterface
+func (db *GnbMockDBClient) StartSession() (dbadapter.DBSession, error) {
+	return nil, nil
 }
 
-func (db *MockMongoClientPutExistingUpf) RestfulAPIGetMany(collName string, filter bson.M) ([]map[string]interface{}, error) {
-	return []map[string]interface{}{}, nil
+func (db *GnbMockDBClient) RestfulAPIPostManyWithContext(context context.Context, collName string, filter bson.M, postDataArray []any) error {
+	if db.err != nil {
+		return db.err
+	}
+	if len(db.gnbs) == 0 {
+		return nil
+	}
+	return errors.New("E11000")
 }
 
-func (m *MockMongoClientPutExistingUpf) StartSession() (mongo.Session, error) {
-	return &MockSession{}, nil
-}
-
-func (db *MockMongoClientPutExistingUpf) RestfulAPIPutOneWithContext(context context.Context, collName string, filter bson.M, putData map[string]interface{}) (bool, error) {
-	return true, nil
-}
-
-func (db *MockMongoClientPutExistingUpf) RestfulAPIJSONPatchWithContext(context context.Context, collName string, filter bson.M, patchJSON []byte) error {
+func (db *GnbMockDBClient) RestfulAPIDeleteOneWithContext(context context.Context, collName string, filter bson.M) error {
+	if db.err != nil {
+		return db.err
+	}
 	return nil
 }
 
-func TestInventoryGetHandlers(t *testing.T) {
+func upf(hostname, port string) configmodels.Upf {
+	return configmodels.Upf{
+		Hostname: hostname,
+		Port:     port,
+	}
+}
+
+type UpfMockDBClient struct {
+	dbadapter.DBInterface
+	upfs []configmodels.Upf
+	err  error
+}
+
+func (db *UpfMockDBClient) RestfulAPIGetMany(coll string, filter bson.M) ([]map[string]any, error) {
+	if coll == sliceDataColl {
+		return nil, nil
+	}
+	if db.err != nil {
+		return nil, db.err
+	}
+	var results []map[string]any
+	for _, u := range db.upfs {
+		upf := configmodels.ToBsonM(u)
+		if upf == nil {
+			logger.DbLog.Fatalln("failed to convert upfs to BsonM")
+		}
+		results = append(results, upf)
+	}
+	return results, db.err
+}
+
+func (db *UpfMockDBClient) RestfulAPIPutOneWithContext(context context.Context, collName string, filter bson.M, putData map[string]any) (bool, error) {
+	if db.err != nil {
+		return false, db.err
+	}
+	if len(db.upfs) == 0 {
+		return false, nil
+	}
+	return true, nil // Return true if data exists
+}
+
+func (db *UpfMockDBClient) StartSession() (dbadapter.DBSession, error) {
+	return nil, nil
+}
+
+func (db *UpfMockDBClient) RestfulAPIPostManyWithContext(context context.Context, collName string, filter bson.M, postDataArray []any) error {
+	if db.err != nil {
+		return db.err
+	}
+	if len(db.upfs) == 0 {
+		return nil
+	}
+	return errors.New("E11000")
+}
+
+func (db *UpfMockDBClient) RestfulAPIDeleteOneWithContext(context context.Context, collName string, filter bson.M) error {
+	if db.err != nil {
+		return db.err
+	}
+	return nil
+}
+
+func TestInventoryGetGnbHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	AddConfigV1Service(router)
+
+	testCases := []struct {
+		name           string
+		route          string
+		configuredGnbs []configmodels.Gnb
+		expectedCode   int
+		expectedBody   []configmodels.Gnb
+	}{
+		{
+			name:           "GnbEmptyDB",
+			route:          gnbInventoryPath,
+			configuredGnbs: []configmodels.Gnb{},
+			expectedCode:   http.StatusOK,
+			expectedBody:   []configmodels.Gnb{},
+		},
+		{
+			name:           "OneGnb",
+			route:          gnbInventoryPath,
+			configuredGnbs: []configmodels.Gnb{gnb("gnb1", 123)},
+			expectedCode:   http.StatusOK,
+			expectedBody:   []configmodels.Gnb{gnb("gnb1", 123)},
+		},
+		{
+			name:           "ManyGnbs",
+			route:          gnbInventoryPath,
+			configuredGnbs: []configmodels.Gnb{gnb("gnb0", 12), gnb("gnb1", 345), gnb("gnb2", 678)},
+			expectedCode:   http.StatusOK,
+			expectedBody:   []configmodels.Gnb{gnb("gnb0", 12), gnb("gnb1", 345), gnb("gnb2", 678)},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
+
+			dbadapter.CommonDBClient = &GnbMockDBClient{
+				gnbs: tc.configuredGnbs,
+			}
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tc.route, nil)
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			if tc.expectedCode != w.Code {
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
+			}
+			bodyBytes, err := io.ReadAll(w.Body)
+			if err != nil {
+				t.Fatalf("failed to read response body: %v", err)
+			}
+			var actual []configmodels.Gnb
+			if err := json.Unmarshal(bodyBytes, &actual); err != nil {
+				t.Fatalf("failed to unmarshal response body: %v", err)
+			}
+			expected := tc.expectedBody
+			if !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected %+v, got %+v", expected, actual)
+			}
+		})
+	}
+}
+
+func TestInventoryGetUPFHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	AddConfigV1Service(router)
+
+	testCases := []struct {
+		name           string
+		route          string
+		configuredUpfs []configmodels.Upf
+		expectedCode   int
+		expectedBody   []configmodels.Upf
+	}{
+		{
+			name:           "UpfEmptyDB",
+			route:          upfInventoryPath,
+			configuredUpfs: []configmodels.Upf{},
+			expectedCode:   http.StatusOK,
+			expectedBody:   []configmodels.Upf{},
+		},
+		{
+			name:           "OneUpf",
+			route:          upfInventoryPath,
+			configuredUpfs: []configmodels.Upf{upf("upf1", "123")},
+			expectedCode:   http.StatusOK,
+			expectedBody:   []configmodels.Upf{upf("upf1", "123")},
+		},
+		{
+			name:           "ManyUpfs",
+			route:          upfInventoryPath,
+			configuredUpfs: []configmodels.Upf{upf("upf0", "12"), upf("upf1", "345"), upf("upf2", "678")},
+			expectedCode:   http.StatusOK,
+			expectedBody:   []configmodels.Upf{upf("upf0", "12"), upf("upf1", "345"), upf("upf2", "678")},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
+
+			dbadapter.CommonDBClient = &UpfMockDBClient{
+				upfs: tc.configuredUpfs,
+			}
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tc.route, nil)
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			if tc.expectedCode != w.Code {
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
+			}
+			bodyBytes, err := io.ReadAll(w.Body)
+			if err != nil {
+				t.Fatalf("failed to read response body: %v", err)
+			}
+			var actual []configmodels.Upf
+			if err := json.Unmarshal(bodyBytes, &actual); err != nil {
+				t.Fatalf("failed to unmarshal response body: %v", err)
+			}
+			expected := tc.expectedBody
+			if !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected %+v, got %+v", expected, actual)
+			}
+		})
+	}
+}
+
+func TestGetInventory_DBError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 	AddConfigV1Service(router)
@@ -128,69 +305,30 @@ func TestInventoryGetHandlers(t *testing.T) {
 		route        string
 		dbAdapter    dbadapter.DBInterface
 		expectedCode int
-		expectedBody string
+		expectedBody map[string]string
 	}{
 		{
-			name:         "GnbEmptyDB",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientEmptyDB{},
-			expectedCode: http.StatusOK,
-			expectedBody: "[]",
-		},
-		{
-			name:         "OneGnb",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientOneGnb{},
-			expectedCode: http.StatusOK,
-			expectedBody: `[{"name":"gnb1","tac":123}]`,
-		},
-		{
-			name:         "ManyGnbs",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientManyGnbs{},
-			expectedCode: http.StatusOK,
-			expectedBody: `[{"name":"gnb0","tac":12},{"name":"gnb1","tac":345},{"name":"gnb2","tac":678}]`,
-		},
-		{
 			name:         "GnbDBError",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientDBError{},
+			route:        gnbInventoryPath,
+			dbAdapter:    &GnbMockDBClient{err: fmt.Errorf("mock error")},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"failed to retrieve gNBs"}`,
-		},
-		{
-			name:         "UpfEmptyDB",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientEmptyDB{},
-			expectedCode: http.StatusOK,
-			expectedBody: "[]",
-		},
-		{
-			name:         "OneUpf",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientOneUpf{},
-			expectedCode: http.StatusOK,
-			expectedBody: `[{"hostname":"upf1","port":"123"}]`,
-		},
-		{
-			name:         "ManyUpfs",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientManyUpfs{},
-			expectedCode: http.StatusOK,
-			expectedBody: `[{"hostname":"upf0","port":"12"},{"hostname":"upf1","port":"345"},{"hostname":"upf2","port":"678"}]`,
+			expectedBody: map[string]string{errorKey: "failed to retrieve gNBs"},
 		},
 		{
 			name:         "UpfDBError",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientDBError{},
+			route:        upfInventoryPath,
+			dbAdapter:    &UpfMockDBClient{err: fmt.Errorf("mock error")},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"failed to retrieve UPFs"}`,
+			expectedBody: map[string]string{errorKey: "failed to retrieve UPFs"},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
+
 			dbadapter.CommonDBClient = tc.dbAdapter
-			req, err := http.NewRequest(http.MethodGet, tc.route, nil)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tc.route, nil)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -199,10 +337,19 @@ func TestInventoryGetHandlers(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
-			if w.Body.String() != tc.expectedBody {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+			bodyBytes, err := io.ReadAll(w.Body)
+			if err != nil {
+				t.Fatalf("failed to read response body: %v", err)
+			}
+			var actual map[string]string
+			if err := json.Unmarshal(bodyBytes, &actual); err != nil {
+				t.Fatalf("failed to unmarshal JSON: %v", err)
+			}
+			expected := tc.expectedBody
+			if !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected response body %v, got %v", expected, actual)
 			}
 		})
 	}
@@ -219,85 +366,87 @@ func TestGnbPostHandler(t *testing.T) {
 		dbAdapter    dbadapter.DBInterface
 		inputData    string
 		expectedCode int
-		expectedBody string
+		expectedBody map[string]string
 	}{
 		{
 			name:         "Create a new gNB expects created status",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientEmptyDB{},
-			inputData:    `{"name": "gnb1", "tac": 123}`,
+			route:        gnbInventoryPath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
+			inputData:    gnbCreateBody,
 			expectedCode: http.StatusCreated,
-			expectedBody: "{}",
+			expectedBody: make(map[string]string),
 		},
 		{
 			name:         "Create a new gNB without TAC expects created status",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        gnbInventoryPath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
 			inputData:    `{"name": "gnb1"}`,
 			expectedCode: http.StatusCreated,
-			expectedBody: "{}",
+			expectedBody: make(map[string]string),
 		},
 		{
 			name:         "Create an existing gNB expects failure",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientDuplicateCreation{},
-			inputData:    `{"name": "gnb1", "tac": 123}`,
+			route:        gnbInventoryPath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{{Name: "gnb1"}}},
+			inputData:    gnbCreateBody,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"gNB already exists"}`,
+			expectedBody: map[string]string{errorKey: "gNB already exists"},
 		},
 		{
 			name:         "TAC is not an integer expects failure",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        gnbInventoryPath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
 			inputData:    `{"name": "gnb1", "tac": "123"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid JSON format"}`,
+			expectedBody: map[string]string{errorKey: errMsgInvalidJSONFormat},
 		},
 		{
 			name:         "TAC is zero expects failure",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        gnbInventoryPath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
 			inputData:    `{"name": "gnb1", "tac": 0}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid gNB TAC '0'. TAC must be an integer within the range [1, 16777215]"}`,
+			expectedBody: map[string]string{errorKey: "invalid gNB TAC '0'. TAC must be an integer within the range [1, 16777215]"},
 		},
 		{
 			name:         "DB POST operation fails expects failure",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientDBError{},
-			inputData:    `{"name": "gnb1", "tac": 123}`,
+			route:        gnbInventoryPath,
+			dbAdapter:    &GnbMockDBClient{err: fmt.Errorf("mock error")},
+			inputData:    gnbCreateBody,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"failed to create gNB"}`,
+			expectedBody: map[string]string{errorKey: "failed to create gNB"},
 		},
 		{
 			name:         "gNB name not provided expects failure",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        gnbInventoryPath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
 			inputData:    `{"tac": 12}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "{\"error\":\"invalid gNB name ''. Name needs to match the following regular expression: " + NAME_PATTERN + "\"}",
+			expectedBody: map[string]string{errorKey: "invalid gNB name ''. Name needs to match the following regular expression: " + NAME_PATTERN},
 		},
 		{
 			name:         "Invalid gNB name expects failure (invalid token)",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        gnbInventoryPath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
 			inputData:    `{"name": "gn!b1", "tac": 123}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "{\"error\":\"invalid gNB name 'gn!b1'. Name needs to match the following regular expression: " + NAME_PATTERN + "\"}",
+			expectedBody: map[string]string{errorKey: "invalid gNB name 'gn!b1'. Name needs to match the following regular expression: " + NAME_PATTERN},
 		},
 		{
 			name:         "Invalid gNB name expects failure (invalid length)",
-			route:        "/config/v1/inventory/gnb",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        gnbInventoryPath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
 			inputData:    "{\"name\": \"" + genLongString(257) + "\", \"tac\": 123}",
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "{\"error\":\"invalid gNB name '" + genLongString(257) + "'. Name needs to match the following regular expression: " + NAME_PATTERN + "\"}",
+			expectedBody: map[string]string{errorKey: "invalid gNB name '" + genLongString(257) + "'. Name needs to match the following regular expression: " + NAME_PATTERN},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
 			dbadapter.CommonDBClient = tc.dbAdapter
-			req, err := http.NewRequest(http.MethodPost, tc.route, strings.NewReader(tc.inputData))
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, tc.route, strings.NewReader(tc.inputData))
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -306,10 +455,19 @@ func TestGnbPostHandler(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
-			if tc.expectedBody != w.Body.String() {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+			bodyBytes, err := io.ReadAll(w.Body)
+			if err != nil {
+				t.Fatalf("failed to read response body: %v", err)
+			}
+			var actual map[string]string
+			if err := json.Unmarshal(bodyBytes, &actual); err != nil {
+				t.Fatalf("failed to unmarshal JSON: %v", err)
+			}
+			expected := tc.expectedBody
+			if !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected response body %v, got %v", expected, actual)
 			}
 		})
 	}
@@ -326,61 +484,63 @@ func TestGnbPutHandler(t *testing.T) {
 		dbAdapter    dbadapter.DBInterface
 		inputData    string
 		expectedCode int
-		expectedBody string
+		expectedBody map[string]string
 	}{
 		{
 			name:         "Put a new gNB expects OK status",
-			route:        "/config/v1/inventory/gnb/gnb1",
-			dbAdapter:    &MockMongoClientEmptyDB{},
-			inputData:    `{"tac": 123}`,
+			route:        gnbByNamePath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
+			inputData:    gnbTacOnlyBody,
 			expectedCode: http.StatusOK,
-			expectedBody: "{}",
+			expectedBody: make(map[string]string),
 		},
 		{
 			name:         "Put an existing gNB expects a OK status",
-			route:        "/config/v1/inventory/gnb/gnb1",
-			dbAdapter:    &MockMongoClientPutExistingUpf{},
-			inputData:    `{"tac": 123}`,
+			route:        gnbByNamePath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{{Name: "name"}}},
+			inputData:    gnbTacOnlyBody,
 			expectedCode: http.StatusOK,
-			expectedBody: "{}",
+			expectedBody: make(map[string]string),
 		},
 		{
 			name:         "TAC is not an integer expects failure",
-			route:        "/config/v1/inventory/gnb/gnb1",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        gnbByNamePath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
 			inputData:    `{"tac": "123"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid JSON format"}`,
+			expectedBody: map[string]string{errorKey: errMsgInvalidJSONFormat},
 		},
 		{
 			name:         "Missing TAC expects failure",
-			route:        "/config/v1/inventory/gnb/gnb1",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        gnbByNamePath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
 			inputData:    `{"some_param": 123}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid gNB TAC '0'. TAC must be an integer within the range [1, 16777215]"}`,
+			expectedBody: map[string]string{errorKey: "invalid gNB TAC '0'. TAC must be an integer within the range [1, 16777215]"},
 		},
 		{
 			name:         "DB PUT operation fails expects failure",
-			route:        "/config/v1/inventory/gnb/gnb1",
-			dbAdapter:    &MockMongoClientDBError{},
-			inputData:    `{"tac": 123}`,
+			route:        gnbByNamePath,
+			dbAdapter:    &GnbMockDBClient{err: fmt.Errorf("mock error")},
+			inputData:    gnbTacOnlyBody,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"failed to PUT gNB"}`,
+			expectedBody: map[string]string{errorKey: "failed to PUT gNB"},
 		},
 		{
 			name:         "Invalid gNB name expects failure",
 			route:        "/config/v1/inventory/gnb/gn!b1",
-			dbAdapter:    &MockMongoClientEmptyDB{},
-			inputData:    `{"tac": 123}`,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
+			inputData:    gnbTacOnlyBody,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: "{\"error\":\"invalid gNB name 'gn!b1'. Name needs to match the following regular expression: " + NAME_PATTERN + "\"}",
+			expectedBody: map[string]string{errorKey: "invalid gNB name 'gn!b1'. Name needs to match the following regular expression: " + NAME_PATTERN},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
 			dbadapter.CommonDBClient = tc.dbAdapter
-			req, err := http.NewRequest(http.MethodPut, tc.route, strings.NewReader(tc.inputData))
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, tc.route, strings.NewReader(tc.inputData))
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -389,10 +549,19 @@ func TestGnbPutHandler(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
-			if tc.expectedBody != w.Body.String() {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+			bodyBytes, err := io.ReadAll(w.Body)
+			if err != nil {
+				t.Fatalf("failed to read response body: %v", err)
+			}
+			var actual map[string]string
+			if err := json.Unmarshal(bodyBytes, &actual); err != nil {
+				t.Fatalf("failed to unmarshal JSON: %v", err)
+			}
+			expected := tc.expectedBody
+			if !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected response body %v, got %v", expected, actual)
 			}
 		})
 	}
@@ -409,77 +578,79 @@ func TestUpfPostHandler(t *testing.T) {
 		dbAdapter    dbadapter.DBInterface
 		inputData    string
 		expectedCode int
-		expectedBody string
+		expectedBody map[string]string
 	}{
 		{
 			name:         "Create a new UPF success",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientEmptyDB{},
-			inputData:    `{"hostname": "upf1.my-domain.com", "port": "123"}`,
+			route:        upfInventoryPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
+			inputData:    upfCreateBody,
 			expectedCode: http.StatusCreated,
-			expectedBody: "{}",
+			expectedBody: make(map[string]string),
 		},
 		{
 			name:         "Create an existing UPF expects failure",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientDuplicateCreation{},
-			inputData:    `{"hostname": "upf1.my-domain.com", "port": "123"}`,
+			route:        upfInventoryPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{upf("upf1.my-domain.com", "123")}},
+			inputData:    upfCreateBody,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"UPF already exists"}`,
+			expectedBody: map[string]string{errorKey: "UPF already exists"},
 		},
 		{
 			name:         "Port is not a string expects failure",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        upfInventoryPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
 			inputData:    `{"hostname": "upf1.my-domain.com", "port": 1234}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid JSON format"}`,
+			expectedBody: map[string]string{errorKey: errMsgInvalidJSONFormat},
 		},
 		{
 			name:         "Missing port expects failure",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        upfInventoryPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
 			inputData:    `{"hostname": "upf1.my-domain.com", "some_param": "123"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid UPF port ''. Port must be a numeric string within the range [0, 65535]"}`,
+			expectedBody: map[string]string{errorKey: "invalid UPF port ''. Port must be a numeric string within the range [0, 65535]"},
 		},
 		{
 			name:         "DB POST operation fails expects failure",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientDBError{},
-			inputData:    `{"hostname": "upf1.my-domain.com", "port": "123"}`,
+			route:        upfInventoryPath,
+			dbAdapter:    &UpfMockDBClient{err: fmt.Errorf("mock error")},
+			inputData:    upfCreateBody,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"failed to create UPF"}`,
+			expectedBody: map[string]string{errorKey: "failed to create UPF"},
 		},
 		{
 			name:         "Port cannot be converted to int expects failure",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        upfInventoryPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
 			inputData:    `{"hostname": "upf1.my-domain.com", "port": "a"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid UPF port 'a'. Port must be a numeric string within the range [0, 65535]"}`,
+			expectedBody: map[string]string{errorKey: "invalid UPF port 'a'. Port must be a numeric string within the range [0, 65535]"},
 		},
 		{
 			name:         "Hostname not provided expects failure",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        upfInventoryPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
 			inputData:    `{"port": "a"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid UPF hostname ''. Hostname needs to represent a valid FQDN"}`,
+			expectedBody: map[string]string{errorKey: "invalid UPF hostname ''. Hostname needs to represent a valid FQDN"},
 		},
 		{
 			name:         "Invalid UPF hostname expects failure",
-			route:        "/config/v1/inventory/upf",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        upfInventoryPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
 			inputData:    `{"hostname": "upf1", "port": "123"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid UPF hostname 'upf1'. Hostname needs to represent a valid FQDN"}`,
+			expectedBody: map[string]string{errorKey: "invalid UPF hostname 'upf1'. Hostname needs to represent a valid FQDN"},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
 			dbadapter.CommonDBClient = tc.dbAdapter
-			req, err := http.NewRequest(http.MethodPost, tc.route, strings.NewReader(tc.inputData))
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, tc.route, strings.NewReader(tc.inputData))
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -488,10 +659,19 @@ func TestUpfPostHandler(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
-			if tc.expectedBody != w.Body.String() {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+			bodyBytes, err := io.ReadAll(w.Body)
+			if err != nil {
+				t.Fatalf("failed to read response body: %v", err)
+			}
+			var actual map[string]string
+			if err := json.Unmarshal(bodyBytes, &actual); err != nil {
+				t.Fatalf("failed to unmarshal JSON: %v", err)
+			}
+			expected := tc.expectedBody
+			if !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected response body %v, got %v", expected, actual)
 			}
 		})
 	}
@@ -508,69 +688,71 @@ func TestUpfPutHandler(t *testing.T) {
 		dbAdapter    dbadapter.DBInterface
 		inputData    string
 		expectedCode int
-		expectedBody string
+		expectedBody map[string]string
 	}{
 		{
 			name:         "Put a new UPF expects OK status",
-			route:        "/config/v1/inventory/upf/upf1.my-domain.com",
-			dbAdapter:    &MockMongoClientEmptyDB{},
-			inputData:    `{"port": "123"}`,
+			route:        upfByFQDNPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
+			inputData:    upfPortOnlyBody,
 			expectedCode: http.StatusOK,
-			expectedBody: "{}",
+			expectedBody: make(map[string]string),
 		},
 		{
 			name:         "Put an existing UPF expects a OK status",
-			route:        "/config/v1/inventory/upf/upf1.my-domain.com",
-			dbAdapter:    &MockMongoClientPutExistingUpf{},
-			inputData:    `{"port": "123"}`,
+			route:        upfByFQDNPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{upf("upf1.my-domain.com", "123")}},
+			inputData:    upfPortOnlyBody,
 			expectedCode: http.StatusOK,
-			expectedBody: "{}",
+			expectedBody: make(map[string]string),
 		},
 		{
 			name:         "Port is not a string expects failure",
-			route:        "/config/v1/inventory/upf/upf1.my-domain.com",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        upfByFQDNPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
 			inputData:    `{"port": 1234}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid JSON format"}`,
+			expectedBody: map[string]string{errorKey: errMsgInvalidJSONFormat},
 		},
 		{
 			name:         "Missing port expects failure",
-			route:        "/config/v1/inventory/upf/upf1.my-domain.com",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        upfByFQDNPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
 			inputData:    `{"some_param": "123"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid UPF port ''. Port must be a numeric string within the range [0, 65535]"}`,
+			expectedBody: map[string]string{errorKey: "invalid UPF port ''. Port must be a numeric string within the range [0, 65535]"},
 		},
 		{
 			name:         "DB PUT operation fails expects failure",
-			route:        "/config/v1/inventory/upf/upf1.my-domain.com",
-			dbAdapter:    &MockMongoClientDBError{},
-			inputData:    `{"port": "123"}`,
+			route:        upfByFQDNPath,
+			dbAdapter:    &UpfMockDBClient{err: fmt.Errorf("mock error")},
+			inputData:    upfPortOnlyBody,
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"failed to PUT UPF"}`,
+			expectedBody: map[string]string{errorKey: "failed to PUT UPF"},
 		},
 		{
 			name:         "Port cannot be converted to int expects failure",
-			route:        "/config/v1/inventory/upf/upf1.my-domain.com",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        upfByFQDNPath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
 			inputData:    `{"port": "a"}`,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid UPF port 'a'. Port must be a numeric string within the range [0, 65535]"}`,
+			expectedBody: map[string]string{errorKey: "invalid UPF port 'a'. Port must be a numeric string within the range [0, 65535]"},
 		},
 		{
 			name:         "Invalid UPF hostname expects failure",
-			route:        "/config/v1/inventory/upf/upf1",
-			dbAdapter:    &MockMongoClientEmptyDB{},
-			inputData:    `{"port": "123"}`,
+			route:        upfByNamePath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
+			inputData:    upfPortOnlyBody,
 			expectedCode: http.StatusBadRequest,
-			expectedBody: `{"error":"invalid UPF hostname 'upf1'. Hostname needs to represent a valid FQDN"}`,
+			expectedBody: map[string]string{errorKey: "invalid UPF hostname 'upf1'. Hostname needs to represent a valid FQDN"},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
 			dbadapter.CommonDBClient = tc.dbAdapter
-			req, err := http.NewRequest(http.MethodPut, tc.route, strings.NewReader(tc.inputData))
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, tc.route, strings.NewReader(tc.inputData))
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -579,10 +761,19 @@ func TestUpfPutHandler(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
-			if tc.expectedBody != w.Body.String() {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+			bodyBytes, err := io.ReadAll(w.Body)
+			if err != nil {
+				t.Fatalf("failed to read response body: %v", err)
+			}
+			var actual map[string]string
+			if err := json.Unmarshal(bodyBytes, &actual); err != nil {
+				t.Fatalf("failed to unmarshal JSON: %v", err)
+			}
+			expected := tc.expectedBody
+			if !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected response body %v, got %v", expected, actual)
 			}
 		})
 	}
@@ -598,41 +789,43 @@ func TestInventoryDeleteHandlers(t *testing.T) {
 		route        string
 		dbAdapter    dbadapter.DBInterface
 		expectedCode int
-		expectedBody string
+		expectedBody map[string]string
 	}{
 		{
 			name:         "Delete gNB Success",
-			route:        "/config/v1/inventory/gnb/gnb1",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        gnbByNamePath,
+			dbAdapter:    &GnbMockDBClient{gnbs: []configmodels.Gnb{}},
 			expectedCode: http.StatusOK,
-			expectedBody: "{}",
+			expectedBody: make(map[string]string),
 		},
 		{
 			name:         "Delete gNB DB Failure",
-			route:        "/config/v1/inventory/gnb/gnb1",
-			dbAdapter:    &MockMongoClientDBError{},
+			route:        gnbByNamePath,
+			dbAdapter:    &GnbMockDBClient{err: fmt.Errorf("mock error")},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"failed to delete gNB"}`,
+			expectedBody: map[string]string{errorKey: "failed to delete gNB"},
 		},
 		{
 			name:         "Delete UPF Success",
-			route:        "/config/v1/inventory/upf/upf1",
-			dbAdapter:    &MockMongoClientEmptyDB{},
+			route:        upfByNamePath,
+			dbAdapter:    &UpfMockDBClient{upfs: []configmodels.Upf{}},
 			expectedCode: http.StatusOK,
-			expectedBody: "{}",
+			expectedBody: make(map[string]string),
 		},
 		{
 			name:         "Delete UPF DB Failure",
-			route:        "/config/v1/inventory/upf/upf1",
-			dbAdapter:    &MockMongoClientDBError{},
+			route:        upfByNamePath,
+			dbAdapter:    &UpfMockDBClient{err: fmt.Errorf("mock error")},
 			expectedCode: http.StatusInternalServerError,
-			expectedBody: `{"error":"failed to delete UPF"}`,
+			expectedBody: map[string]string{errorKey: "failed to delete UPF"},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			originalDBClient := dbadapter.CommonDBClient
+			defer func() { dbadapter.CommonDBClient = originalDBClient }()
 			dbadapter.CommonDBClient = tc.dbAdapter
-			req, err := http.NewRequest(http.MethodDelete, tc.route, nil)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, tc.route, nil)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -641,10 +834,19 @@ func TestInventoryDeleteHandlers(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
-			if tc.expectedBody != w.Body.String() {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+			bodyBytes, err := io.ReadAll(w.Body)
+			if err != nil {
+				t.Fatalf("failed to read response body: %v", err)
+			}
+			var actual map[string]string
+			if err := json.Unmarshal(bodyBytes, &actual); err != nil {
+				t.Fatalf("failed to unmarshal JSON: %v", err)
+			}
+			expected := tc.expectedBody
+			if !reflect.DeepEqual(expected, actual) {
+				t.Errorf("expected response body %v, got %v", expected, actual)
 			}
 		})
 	}

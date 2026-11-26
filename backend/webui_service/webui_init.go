@@ -10,6 +10,7 @@ package webui_service
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	_ "net/http/pprof"
 	"strconv"
@@ -25,17 +26,15 @@ import (
 	"github.com/omec-project/webconsole/backend/metrics"
 	"github.com/omec-project/webconsole/backend/webui_context"
 	"github.com/omec-project/webconsole/configapi"
-	"github.com/omec-project/webconsole/configmodels"
-	gServ "github.com/omec-project/webconsole/proto/server"
 )
 
 type WEBUI struct{}
 
 type WebUIInterface interface {
-	Start(ctx context.Context)
+	Start(ctx context.Context, syncChan chan<- struct{})
 }
 
-func setupAuthenticationFeature(subconfig_router *gin.Engine) {
+func setupAuthenticationFeature(subconfig_router *gin.Engine, nfSyncMiddelware gin.HandlerFunc) {
 	jwtSecret, err := auth.GenerateJWTSecret()
 	if err != nil {
 		logger.InitLog.Error(err)
@@ -43,25 +42,24 @@ func setupAuthenticationFeature(subconfig_router *gin.Engine) {
 	}
 	configapi.AddUserAccountService(subconfig_router, jwtSecret)
 	auth.AddAuthenticationService(subconfig_router, jwtSecret)
-	configapi.AddApiServiceWithAuthorization(subconfig_router, jwtSecret)
-	configapi.AddConfigV1ServiceWithAuthorization(subconfig_router, jwtSecret)
+	authMiddleware := auth.AdminOrUserAuthMiddleware(jwtSecret)
+	configapi.AddApiService(subconfig_router, authMiddleware)
+	configapi.AddConfigV1Service(subconfig_router, nfSyncMiddelware, authMiddleware)
 }
 
-func (webui *WEBUI) Start(ctx context.Context) {
+func (webui *WEBUI) Start(ctx context.Context, syncChan chan<- struct{}) {
 	subconfig_router := utilLogger.NewGinWithZap(logger.GinLog)
+	nFConfigSyncMiddleware := triggerNFConfigSyncMiddleware(syncChan)
 	if factory.WebUIConfig.Configuration.EnableAuthentication {
-		setupAuthenticationFeature(subconfig_router)
+		setupAuthenticationFeature(subconfig_router, nFConfigSyncMiddleware)
 	} else {
 		configapi.AddApiService(subconfig_router)
-		configapi.AddConfigV1Service(subconfig_router)
+		configapi.AddConfigV1Service(subconfig_router, nFConfigSyncMiddleware)
 	}
 	AddSwaggerUiService(subconfig_router)
 	AddUiService(subconfig_router)
 
 	go metrics.InitMetrics()
-
-	configMsgChan := make(chan *configmodels.ConfigMessage, 10)
-	configapi.SetChannel(configMsgChan)
 
 	subconfig_router.Use(cors.New(cors.Config{
 		AllowMethods: []string{"GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"},
@@ -75,7 +73,11 @@ func (webui *WEBUI) Start(ctx context.Context) {
 		MaxAge:           86400,
 	}))
 
+	// The goroutine sends the configured server, or closes the channel without
+	// sending when configuration fails, so the shutdown below knows which.
+	serverCh := make(chan *http.Server, 1)
 	go func() {
+		defer close(serverCh)
 		httpAddr := ":" + strconv.Itoa(factory.WebUIConfig.Configuration.CfgPort)
 		logger.InitLog.Infoln("Webui HTTP addr", httpAddr)
 		tlsConfig := factory.WebUIConfig.Configuration.WebuiTLS
@@ -101,7 +103,7 @@ func (webui *WEBUI) Start(ctx context.Context) {
 			}
 		}
 
-		logger.InitLog.Infoln("Starting HTTP server on", httpAddr)
+		serverCh <- server
 		if tlsConfig != nil {
 			logger.InitLog.Infoln("Starting HTTPS server with TLS on", httpAddr)
 			err = server.ListenAndServeTLS(tlsConfig.PEM, tlsConfig.Key)
@@ -109,64 +111,48 @@ func (webui *WEBUI) Start(ctx context.Context) {
 			logger.InitLog.Infoln("Starting HTTP server on", httpAddr)
 			err = server.ListenAndServe()
 		}
-		if err != nil {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.InitLog.Fatalln("HTTP server setup failed:", err)
 		}
 	}()
 
-	if factory.WebUIConfig.Configuration.Mode5G {
-		self := webui_context.WEBUI_Self()
-		self.UpdateNfProfiles()
-	}
-
-	// Start grpc Server. This has embedded functionality of sending
-	// 4G config over REST Api as well.
-	host := "0.0.0.0:9876"
-	confServ := &gServ.ConfigServer{}
-	go gServ.StartServer(host, confServ, configMsgChan)
-
-	// fetch one time configuration from the simapp/roc on startup
-	// this is to fetch existing config
-	go fetchConfigAdapater()
-
-	// http.ListenAndServe("0.0.0.0:5001", nil)
+	self := webui_context.WEBUI_Self()
+	self.UpdateNfProfiles()
 
 	<-ctx.Done()
 	logger.AppLog.Infoln("WebUI shutting down due to context cancel")
+	// Wait for configuration to end either way: a server that is still being
+	// configured would otherwise start listening after Start has returned.
+	// Shutdown also works before ListenAndServe, which then returns at once.
+	server, ok := <-serverCh
+	if !ok {
+		// Configuration failed; there is no server to shut down.
+		return
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.AppLog.Warnln("WebUI server shutdown:", err)
+	}
 }
 
-func fetchConfigAdapater() {
-	for {
-		if (factory.WebUIConfig.Configuration == nil) ||
-			(factory.WebUIConfig.Configuration.RocEnd == nil) ||
-			(!factory.WebUIConfig.Configuration.RocEnd.Enabled) ||
-			(factory.WebUIConfig.Configuration.RocEnd.SyncUrl == "") {
-			time.Sleep(1 * time.Second)
-			continue
+func triggerNFConfigSyncMiddleware(syncChan chan<- struct{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+		if isWritingMethod(c.Request.Method) && isStatusSuccess(c.Writer.Status()) {
+			syncChan <- struct{}{}
+			logger.WebUILog.Infoln("NF config sync triggered via middleware")
+		} else {
+			logger.WebUILog.Debugln("WebUI operation does not require NF configuration synchronization")
 		}
-
-		client := &http.Client{}
-		httpend := factory.WebUIConfig.Configuration.RocEnd.SyncUrl
-		req, err := http.NewRequest(http.MethodPost, httpend, nil)
-		// Handle Error
-		if err != nil {
-			logger.InitLog.Errorf("an error occurred %v", err)
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		// set the request header Content-Type for json
-		req.Header.Set("Content-Type", "application/json; charset=utf-8")
-		resp, err := client.Do(req)
-		if err != nil {
-			logger.InitLog.Errorf("an error occurred %v", err)
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		err = resp.Body.Close()
-		if err != nil {
-			logger.InitLog.Errorf("an error occurred %v", err)
-		}
-		logger.InitLog.Infof("fetching config from simapp/roc. Response code = %d", resp.StatusCode)
-		break
 	}
+}
+
+func isWritingMethod(method string) bool {
+	return method == http.MethodPost || method == http.MethodPut ||
+		method == http.MethodDelete || method == http.MethodPatch
+}
+
+func isStatusSuccess(status int) bool {
+	return status/100 == 2
 }

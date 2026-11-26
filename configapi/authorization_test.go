@@ -16,8 +16,13 @@ import (
 )
 
 const (
-	successBody = `{"Result":"Operation Executed"}`
-	bearer      = "Bearer "
+	deviceGroupSomeNamePath   = "/config/v1/device-group/some-name"
+	networkSliceSomeSlicePath = "/config/v1/network-slice/some-slice"
+	subscriberSomeSubsPath    = "/api/subscriber/some-subs"
+	successBody               = `{"Result":"Operation Executed"}`
+	forbiddenAdminBody        = `{"error":"forbidden: admin access required"}`
+	bearer                    = "Bearer "
+	testUserSomeuser          = "someuser"
 )
 
 var mockJWTSecret = []byte("mockSecret")
@@ -32,8 +37,8 @@ func setUpRouter() *gin.Engine {
 	dbadapter.WebuiDBClient = &MockMongoClientSuccess{}
 	router.Use(auth.AdminOrUserAuthMiddleware(mockJWTSecret))
 	AddUserAccountService(router, mockJWTSecret)
-	AddApiServiceWithAuthorization(router, mockJWTSecret)
-	AddConfigV1ServiceWithAuthorization(router, mockJWTSecret)
+	AddApiService(router)
+	AddConfigV1Service(router)
 	return router
 }
 
@@ -69,27 +74,27 @@ func TestAdminOrUserAuthorizationMiddleware_NoHeaderRequest(t *testing.T) {
 		{
 			name:   "GetDeviceGroupByName",
 			method: http.MethodGet,
-			url:    "/config/v1/device-group/some-name",
+			url:    deviceGroupSomeNamePath,
 		},
 		{
 			name:   "DeviceGroupGroupNameDelete",
 			method: http.MethodDelete,
-			url:    "/config/v1/device-group/some-name",
+			url:    deviceGroupSomeNamePath,
 		},
 		{
 			name:   "DeviceGroupGroupNamePatch",
 			method: http.MethodPatch,
-			url:    "/config/v1/device-group/some-name",
+			url:    deviceGroupSomeNamePath,
 		},
 		{
 			name:   "DeviceGroupGroupNamePut",
 			method: http.MethodPut,
-			url:    "/config/v1/device-group/some-name",
+			url:    deviceGroupSomeNamePath,
 		},
 		{
 			name:   "DeviceGroupGroupNamePost",
 			method: http.MethodPost,
-			url:    "/config/v1/device-group/some-name",
+			url:    deviceGroupSomeNamePath,
 		},
 		{
 			name:   "GetNetworkSlices",
@@ -99,27 +104,27 @@ func TestAdminOrUserAuthorizationMiddleware_NoHeaderRequest(t *testing.T) {
 		{
 			name:   "GetNetworkSliceByName",
 			method: http.MethodGet,
-			url:    "/config/v1/network-slice/some-slice",
+			url:    networkSliceSomeSlicePath,
 		},
 		{
 			name:   "NetworkSliceSliceNameDelete",
 			method: http.MethodDelete,
-			url:    "/config/v1/network-slice/some-slice",
+			url:    networkSliceSomeSlicePath,
 		},
 		{
 			name:   "NetworkSliceSliceNamePost",
 			method: http.MethodPost,
-			url:    "/config/v1/network-slice/some-slice",
+			url:    networkSliceSomeSlicePath,
 		},
 		{
 			name:   "NetworkSliceSliceNamePut",
 			method: http.MethodPut,
-			url:    "/config/v1/network-slice/some-slice",
+			url:    networkSliceSomeSlicePath,
 		},
 		{
 			name:   "GetGnbs",
 			method: http.MethodGet,
-			url:    "/config/v1/inventory/gnb",
+			url:    gnbInventoryPath,
 		},
 		{
 			name:   "PostGnb",
@@ -134,7 +139,7 @@ func TestAdminOrUserAuthorizationMiddleware_NoHeaderRequest(t *testing.T) {
 		{
 			name:   "GetUpfs",
 			method: http.MethodGet,
-			url:    "/config/v1/inventory/upf",
+			url:    upfInventoryPath,
 		},
 		{
 			name:   "PostUpf",
@@ -154,17 +159,17 @@ func TestAdminOrUserAuthorizationMiddleware_NoHeaderRequest(t *testing.T) {
 		{
 			name:   "GetSubscribers",
 			method: http.MethodGet,
-			url:    "/api/subscriber",
+			url:    subscriberPath,
 		},
 		{
 			name:   "GetSubscriberByID",
 			method: http.MethodGet,
-			url:    "/api/subscriber/some-subs",
+			url:    subscriberSomeSubsPath,
 		},
 		{
 			name:   "PostSubscriberByID",
 			method: http.MethodPost,
-			url:    "/api/subscriber/some-subs",
+			url:    subscriberSomeSubsPath,
 		},
 		{
 			name:   "PutSubscriberByID",
@@ -174,7 +179,7 @@ func TestAdminOrUserAuthorizationMiddleware_NoHeaderRequest(t *testing.T) {
 		{
 			name:   "DeleteSubscriberByID",
 			method: http.MethodDelete,
-			url:    "/api/subscriber/some-subs",
+			url:    subscriberSomeSubsPath,
 		},
 		{
 			name:   "RegisteredUEContext",
@@ -195,7 +200,7 @@ func TestAdminOrUserAuthorizationMiddleware_NoHeaderRequest(t *testing.T) {
 
 	for _, tc := range protectedPaths {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest(tc.method, tc.url, nil)
+			req, err := http.NewRequestWithContext(t.Context(), tc.method, tc.url, nil)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -206,10 +211,10 @@ func TestAdminOrUserAuthorizationMiddleware_NoHeaderRequest(t *testing.T) {
 			expectedCode := http.StatusUnauthorized
 			expectedBody := `{"error":"auth failed: authorization header not found"}`
 			if expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", expectedCode, w.Code)
 			}
 			if w.Body.String() != expectedBody {
-				t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+				t.Errorf("expected `%v`, got `%v`", expectedBody, w.Body.String())
 			}
 		})
 	}
@@ -247,7 +252,7 @@ func TestAdminOrUserAuthorizationMiddleware_TokenValidation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, "/config/v1/", nil)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/config/v1/", nil)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -257,10 +262,10 @@ func TestAdminOrUserAuthorizationMiddleware_TokenValidation(t *testing.T) {
 
 			expectedCode := http.StatusUnauthorized
 			if expectedCode != w.Code {
-				t.Errorf("Expected status code `%v`, got `%v`", expectedCode, w.Code)
+				t.Errorf("expected status code `%v`, got `%v`", expectedCode, w.Code)
 			}
 			if w.Body.String() != tc.expectedBody {
-				t.Errorf("Expected body `%v`, got `%v`", tc.expectedBody, w.Body.String())
+				t.Errorf("expected body `%v`, got `%v`", tc.expectedBody, w.Body.String())
 			}
 		})
 	}
@@ -278,22 +283,22 @@ func TestGetUserAccounts_AdminOnlyAuthorizationMiddleware(t *testing.T) {
 	}{
 		{
 			name:         "AdminUser_GetUserAccounts",
-			username:     "janedoe",
+			username:     testUserJanedoe,
 			role:         configmodels.AdminRole,
 			expectedCode: http.StatusOK,
 			expectedBody: successBody,
 		},
 		{
 			name:         "RegularUser_GetUserAccounts",
-			username:     "someuser",
+			username:     testUserSomeuser,
 			role:         configmodels.UserRole,
 			expectedCode: http.StatusForbidden,
-			expectedBody: `{"error":"forbidden: admin access required"}`,
+			expectedBody: forbiddenAdminBody,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, "/config/v1/account", nil)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/config/v1/account", nil)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -308,10 +313,10 @@ func TestGetUserAccounts_AdminOnlyAuthorizationMiddleware(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
 			if w.Body.String() != tc.expectedBody {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+				t.Errorf("expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
 			}
 		})
 	}
@@ -329,28 +334,28 @@ func TestGetUserAccount_AdminOrMeAuthorizationMiddleware(t *testing.T) {
 	}{
 		{
 			name:         "RegularUser_GetOwnUserAccount",
-			username:     "janedoe",
+			username:     testUserJanedoe,
 			role:         configmodels.UserRole,
 			expectedCode: http.StatusOK,
 			expectedBody: successBody,
 		},
 		{
 			name:         "AdminUser_GetOwnUserAccount",
-			username:     "janedoe",
+			username:     testUserJanedoe,
 			role:         configmodels.AdminRole,
 			expectedCode: http.StatusOK,
 			expectedBody: successBody,
 		},
 		{
 			name:         "RegularUser_GetOtherUserAccount",
-			username:     "someuser",
+			username:     testUserSomeuser,
 			role:         configmodels.UserRole,
 			expectedCode: http.StatusForbidden,
 			expectedBody: `{"error":"forbidden: admin or me access required"}`,
 		},
 		{
 			name:         "AdminUser_GetOtherUserAccount",
-			username:     "someuser",
+			username:     testUserSomeuser,
 			role:         configmodels.AdminRole,
 			expectedCode: http.StatusOK,
 			expectedBody: successBody,
@@ -358,7 +363,7 @@ func TestGetUserAccount_AdminOrMeAuthorizationMiddleware(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, "/config/v1/account/janedoe", nil)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/config/v1/account/janedoe", nil)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -373,10 +378,10 @@ func TestGetUserAccount_AdminOrMeAuthorizationMiddleware(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
 			if w.Body.String() != tc.expectedBody {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+				t.Errorf("expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
 			}
 		})
 	}
@@ -385,7 +390,7 @@ func TestGetUserAccount_AdminOrMeAuthorizationMiddleware(t *testing.T) {
 func TestCreateUserAccount_CreateFirstUserWithoutHeaderAuthorization(t *testing.T) {
 	router := setUpMockedRouter()
 	dbadapter.WebuiDBClient = &MockMongoClientEmptyDB{}
-	req, err := http.NewRequest(http.MethodPost, "/config/v1/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "/config/v1/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -396,10 +401,10 @@ func TestCreateUserAccount_CreateFirstUserWithoutHeaderAuthorization(t *testing.
 	expectedCode := http.StatusOK
 	expectedBody := successBody
 	if expectedCode != w.Code {
-		t.Errorf("Expected `%v`, got `%v`", expectedCode, w.Code)
+		t.Errorf("expected `%v`, got `%v`", expectedCode, w.Code)
 	}
 	if w.Body.String() != expectedBody {
-		t.Errorf("Expected `%v`, got `%v`", expectedBody, w.Body.String())
+		t.Errorf("expected `%v`, got `%v`", expectedBody, w.Body.String())
 	}
 }
 
@@ -415,22 +420,22 @@ func TestCreateUserAccount_AdminAuthorizationMiddleware(t *testing.T) {
 	}{
 		{
 			name:         "AdminUser_CreateUserAccount",
-			username:     "janedoe",
+			username:     testUserJanedoe,
 			role:         configmodels.AdminRole,
 			expectedCode: http.StatusOK,
 			expectedBody: successBody,
 		},
 		{
 			name:         "RegularUser_CreateUserAccoun",
-			username:     "someuser",
+			username:     testUserSomeuser,
 			role:         configmodels.UserRole,
 			expectedCode: http.StatusForbidden,
-			expectedBody: `{"error":"forbidden: admin access required"}`,
+			expectedBody: forbiddenAdminBody,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodPost, "/config/v1/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "/config/v1/account", strings.NewReader(`{"username": "adminadmin", "password":"ValidPass123!"}`))
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -445,10 +450,10 @@ func TestCreateUserAccount_AdminAuthorizationMiddleware(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
 			if w.Body.String() != tc.expectedBody {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+				t.Errorf("expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
 			}
 		})
 	}
@@ -466,28 +471,28 @@ func TestDeleteUserAccount_AdminOnlyAuthorizationMiddleware(t *testing.T) {
 	}{
 		{
 			name:         "RegularUser_DeleteOwnUserAccount",
-			username:     "janedoe",
+			username:     testUserJanedoe,
 			role:         configmodels.UserRole,
 			expectedCode: http.StatusForbidden,
-			expectedBody: `{"error":"forbidden: admin access required"}`,
+			expectedBody: forbiddenAdminBody,
 		},
 		{
 			name:         "AdminUser_DeleteOwnUserAccount",
-			username:     "janedoe",
+			username:     testUserJanedoe,
 			role:         configmodels.AdminRole,
 			expectedCode: http.StatusOK,
 			expectedBody: successBody,
 		},
 		{
 			name:         "RegularUser_DeleteOtherUserAccount",
-			username:     "someuser",
+			username:     testUserSomeuser,
 			role:         configmodels.UserRole,
 			expectedCode: http.StatusForbidden,
-			expectedBody: `{"error":"forbidden: admin access required"}`,
+			expectedBody: forbiddenAdminBody,
 		},
 		{
 			name:         "AdminUser_DeleteOtherUserAccount",
-			username:     "someuser",
+			username:     testUserSomeuser,
 			role:         configmodels.AdminRole,
 			expectedCode: http.StatusOK,
 			expectedBody: successBody,
@@ -495,7 +500,7 @@ func TestDeleteUserAccount_AdminOnlyAuthorizationMiddleware(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodDelete, "/config/v1/account/janedoe", nil)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, "/config/v1/account/janedoe", nil)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -510,10 +515,10 @@ func TestDeleteUserAccount_AdminOnlyAuthorizationMiddleware(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
 			if w.Body.String() != tc.expectedBody {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+				t.Errorf("expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
 			}
 		})
 	}
@@ -531,28 +536,28 @@ func TestChangePassword_AdminOrMeAuthorizationMiddleware(t *testing.T) {
 	}{
 		{
 			name:         "RegularUser_OwnUserAccount",
-			username:     "janedoe",
+			username:     testUserJanedoe,
 			role:         configmodels.UserRole,
 			expectedCode: http.StatusOK,
 			expectedBody: successBody,
 		},
 		{
 			name:         "AdminUser_OwnUserAccount",
-			username:     "janedoe",
+			username:     testUserJanedoe,
 			role:         configmodels.AdminRole,
 			expectedCode: http.StatusOK,
 			expectedBody: successBody,
 		},
 		{
 			name:         "RegularUser_OtherUserAccount",
-			username:     "someuser",
+			username:     testUserSomeuser,
 			role:         configmodels.UserRole,
 			expectedCode: http.StatusForbidden,
 			expectedBody: `{"error":"forbidden: admin or me access required"}`,
 		},
 		{
 			name:         "AdminUser_OtherUserAccount",
-			username:     "someuser",
+			username:     testUserSomeuser,
 			role:         configmodels.AdminRole,
 			expectedCode: http.StatusOK,
 			expectedBody: successBody,
@@ -560,7 +565,7 @@ func TestChangePassword_AdminOrMeAuthorizationMiddleware(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodPost, "/config/v1/account/janedoe/change_password", nil)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "/config/v1/account/janedoe/change_password", nil)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
@@ -575,10 +580,10 @@ func TestChangePassword_AdminOrMeAuthorizationMiddleware(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if tc.expectedCode != w.Code {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedCode, w.Code)
+				t.Errorf("expected `%v`, got `%v`", tc.expectedCode, w.Code)
 			}
 			if w.Body.String() != tc.expectedBody {
-				t.Errorf("Expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
+				t.Errorf("expected `%v`, got `%v`", tc.expectedBody, w.Body.String())
 			}
 		})
 	}
