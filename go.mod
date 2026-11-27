@@ -23,7 +23,7 @@ require (
 
 require (
 	github.com/5GC-DEV/config5g-cdac v1.4.2-0.20250430103952-0383bf5b24b8 // indirect
-	github.com/5GC-DEV/openapi-cdac v0.4.1 // indirect
+	github.com/5GC-DEV/openapi-cdac/v2 v2.0.0-20260709101533-7c1bcc29a402
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect

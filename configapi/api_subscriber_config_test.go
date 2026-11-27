@@ -14,13 +14,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/5GC-DEV/openapi-cdac/v2"
+	"github.com/5GC-DEV/openapi-cdac/v2/models"
 	"github.com/gin-gonic/gin"
-	"github.com/omec-project/openapi/v2"
-	"github.com/omec-project/openapi/v2/models"
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/configmodels"
 	"github.com/omec-project/webconsole/dbadapter"
-	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 const (
@@ -259,9 +259,11 @@ func (m *MockCommonDBClientWithData) RestfulAPIGetMany(coll string, filter bson.
 	nullableInt32 := openapi.NewNullableInt32(&val)
 	smDataData := []models.SessionManagementSubscriptionData{
 		{
-			SingleNssai: models.Snssai{
-				Sst: 1,
-				Sd:  openapi.PtrString("010203"),
+			SingleNssai: []models.Snssai{
+				{
+					Sst: 1,
+					Sd:  openapi.PtrString("010203"),
+				},
 			},
 			DnnConfigurations: &map[string]models.DnnConfiguration{
 				dnnInternet: {
@@ -402,9 +404,11 @@ func TestGetSubscriberByID(t *testing.T) {
 							},
 						},
 						"odbPacketServices": nil,
-						"singleNssai": map[string]any{
-							"sd":   "010203",
-							sstKey: 1,
+						"singleNssai": []any{
+							map[string]any{
+								"sd":  "010203",
+								"sst": 1,
+							},
 						},
 						"traceData": nil,
 					},

@@ -14,16 +14,15 @@ import (
 	"net/http"
 	"strings"
 
-	// "github.com/5GC-DEV/openapi-cdac/models"
+	"github.com/5GC-DEV/openapi-cdac/v2"
+	"github.com/5GC-DEV/openapi-cdac/v2/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/omec-project/openapi/v2"
-	"github.com/omec-project/openapi/v2/models"
 	"github.com/omec-project/webconsole/backend/logger"
 	"github.com/omec-project/webconsole/backend/webui_context"
 	"github.com/omec-project/webconsole/configmodels"
 	"github.com/omec-project/webconsole/dbadapter"
-	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 var httpsClient *http.Client
@@ -118,9 +117,11 @@ func GetSampleJSON(c *gin.Context) {
 	nullableInt32 := openapi.NewNullableInt32(&val)
 	smDataData := []models.SessionManagementSubscriptionData{
 		{
-			SingleNssai: models.Snssai{
-				Sst: 1,
-				Sd:  openapi.PtrString("010203"),
+			SingleNssai: []models.Snssai{
+				{
+					Sst: 1,
+					Sd:  openapi.PtrString("010203"),
+				},
 			},
 			DnnConfigurations: &map[string]models.DnnConfiguration{
 				dnnInternet: {
@@ -149,9 +150,11 @@ func GetSampleJSON(c *gin.Context) {
 			},
 		},
 		{
-			SingleNssai: models.Snssai{
-				Sst: 1,
-				Sd:  openapi.PtrString("112233"),
+			SingleNssai: []models.Snssai{
+				{
+					Sst: 1,
+					Sd:  openapi.PtrString("010203"),
+				},
 			},
 			DnnConfigurations: &map[string]models.DnnConfiguration{
 				dnnInternet: {
